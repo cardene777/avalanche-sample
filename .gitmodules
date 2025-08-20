@@ -1,0 +1,6 @@
+[submodule "icm-erc20/contract/lib/openzeppelin-contracts"]
+	path = icm-erc20/contract/lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "icm-erc20/contract/lib/icm-contracts"]
+	path = icm-erc20/contract/lib/icm-contracts
+	url = https://github.com/ava-labs/icm-contracts
