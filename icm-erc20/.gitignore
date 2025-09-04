@@ -1,0 +1,25 @@
+# Compiler files
+cache/
+out/
+
+# Ignores development broadcast logs
+/broadcast
+!/broadcast/DeployTeleporterERC20.s.sol/
+!/broadcast/DeploySimpleContracts.s.sol/
+
+# Docs
+docs/
+
+# Dotenv file
+.env
+deploy_output.json
+deploy_output.log
+
+# Coverage
+lcov.info
+
+# Node modules
+node_modules/
+
+# Mac files
+.DS_Store
