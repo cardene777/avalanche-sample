@@ -7,3 +7,9 @@
 [submodule "icm-erc20/lib/teleporter"]
 	path = icm-erc20/lib/teleporter
 	url = https://github.com/ava-labs/teleporter
+[submodule "simple-erc721/lib/forge-std"]
+	path = simple-erc721/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
+[submodule "simple-erc721/lib/openzeppelin-contracts"]
+	path = simple-erc721/lib/openzeppelin-contracts
+	url = https://github.com/openzeppelin/openzeppelin-contracts
