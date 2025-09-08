@@ -3,6 +3,10 @@
 # 環境変数の読み込み
 -include .env
 
+# Avalancheローカルテスト用のewoqキー
+EWOQ_PRIVATE_KEY = 0x56289e99c94b6912bfc12adc093c9b51124f0dc54ac7a766b2bc5ccf558d8027
+EWOQ_ADDRESS = 0x8db97C7cEcE249c2b98bDC0226Cc4C2A57BF52FC
+
 # デフォルトターゲット
 .PHONY: all
 all: build
@@ -47,155 +51,251 @@ setup-env:
 		echo "Created .env file. Please update it with your values."; \
 	fi
 
-# デプロイ関連コマンド
-.PHONY: deploy-teleporter-c
-deploy-teleporter-c: setup-env
-	@echo "Deploying TeleporterERC20 to Fuji C-Chain..."
-	@CHAIN_NAME=fuji-c forge script script/DeployTeleporterERC20.s.sol:DeployTeleporterERC20Script \
-		--rpc-url fuji-c --broadcast -vvv | tee deploy_output.log
+# チェーン設定を取得する関数
+define get_chain_config
+	$(eval CHAIN := $(1))
+	$(if $(filter c-chain,$(CHAIN)),
+		$(eval CHAIN_NAME := fuji-c)
+		$(eval TOKEN_ADDRESS := $(FUJI_C_TOKEN_ADDRESS))
+		$(eval BLOCKCHAIN_ID := $(FUJI_C_CHAIN_BLOCKCHAIN_ID_HEX))
+		$(eval SENDER_CONTRACT := $(FUJI_C_SIMPLE_SENDER_CONTRACT_ADDRESS))
+		$(eval RPC_URL := fuji-c)
+		$(eval DEPLOY_PK := $(PK))
+		$(eval SENDER_ADDRESS := $(SENDER_ADDRESS))
+		$(eval RECEIVER_ADDRESS := $(RECEIVER_ADDRESS))
+		$(eval ENV_VAR_PREFIX := FUJI_C)
+		$(eval CHAIN_DISPLAY := Fuji C-Chain)
+	)
+	$(if $(filter dispatch,$(CHAIN)),
+		$(eval CHAIN_NAME := fuji-dispatch)
+		$(eval TOKEN_ADDRESS := $(FUJI_DISPATCH_TOKEN_ADDRESS))
+		$(eval BLOCKCHAIN_ID := $(FUJI_DISPATCH_BLOCKCHAIN_ID_HEX))
+		$(eval RECEIVER_CONTRACT := $(FUJI_DISPATCH_SIMPLE_RECEIVER_CONTRACT_ADDRESS))
+		$(eval RPC_URL := fuji-dispatch)
+		$(eval DEPLOY_PK := $(PK))
+		$(eval SENDER_ADDRESS := $(SENDER_ADDRESS))
+		$(eval RECEIVER_ADDRESS := $(RECEIVER_ADDRESS))
+		$(eval ENV_VAR_PREFIX := FUJI_DISPATCH)
+		$(eval CHAIN_DISPLAY := Fuji Dispatch)
+	)
+	$(if $(filter local-l1,$(CHAIN)),
+		$(eval CHAIN_NAME := local-l1)
+		$(eval TOKEN_ADDRESS := $(LOCAL_L1_TOKEN_ADDRESS))
+		$(eval BLOCKCHAIN_ID := $(LOCAL_L1_BLOCKCHAIN_ID_HEX))
+		$(eval SENDER_CONTRACT := $(LOCAL_L1_SIMPLE_SENDER_CONTRACT_ADDRESS))
+		$(eval RPC_URL := local-l1)
+		$(eval DEPLOY_PK := $(EWOQ_PRIVATE_KEY))
+		$(eval SENDER_ADDRESS := $(EWOQ_ADDRESS))
+		$(eval RECEIVER_ADDRESS := $(EWOQ_ADDRESS))
+		$(eval ENV_VAR_PREFIX := LOCAL_L1)
+		$(eval CHAIN_DISPLAY := Local L1)
+	)
+	$(if $(filter local-l2,$(CHAIN)),
+		$(eval CHAIN_NAME := local-l2)
+		$(eval TOKEN_ADDRESS := $(LOCAL_L2_TOKEN_ADDRESS))
+		$(eval BLOCKCHAIN_ID := $(LOCAL_L2_BLOCKCHAIN_ID_HEX))
+		$(eval RECEIVER_CONTRACT := $(LOCAL_L2_SIMPLE_RECEIVER_CONTRACT_ADDRESS))
+		$(eval RPC_URL := local-l2)
+		$(eval DEPLOY_PK := $(EWOQ_PRIVATE_KEY))
+		$(eval SENDER_ADDRESS := $(EWOQ_ADDRESS))
+		$(eval RECEIVER_ADDRESS := $(EWOQ_ADDRESS))
+		$(eval ENV_VAR_PREFIX := LOCAL_L2)
+		$(eval CHAIN_DISPLAY := Local L2)
+	)
+endef
+
+# トークンのデプロイ
+.PHONY: deploy-token
+deploy-token: setup-env
+	@if [ -z "$(filter c-chain dispatch local-l1 local-l2,$(MAKECMDGOALS))" ]; then \
+		echo "Usage: make deploy-token [c-chain|dispatch|local-l1|local-l2]"; \
+		exit 1; \
+	fi
+	$(eval TARGET_CHAIN := $(filter c-chain dispatch local-l1 local-l2,$(MAKECMDGOALS)))
+	$(call get_chain_config,$(TARGET_CHAIN))
+	@echo "Deploying TeleporterERC20 to $(CHAIN_DISPLAY)..."
+	@DEPLOY_PK=$(DEPLOY_PK) CHAIN_NAME=$(CHAIN_NAME) forge script script/DeployTeleporterERC20.s.sol:DeployTeleporterERC20Script \
+		--rpc-url $(RPC_URL) --broadcast -vvv | tee deploy_output.log
 	@ADDRESS=$$(grep 'TeleporterERC20 deployed to:' deploy_output.log | awk '{print $$4}'); \
 	if [ -n "$$ADDRESS" ]; then \
-		sed -i.bak 's/^FUJI_C_TOKEN_ADDRESS=.*/FUJI_C_TOKEN_ADDRESS='"$$ADDRESS"'/' .env && rm .env.bak; \
-		echo "Deployment complete. FUJI_C_TOKEN_ADDRESS updated to $$ADDRESS"; \
+		sed -i.bak 's/^$(ENV_VAR_PREFIX)_TOKEN_ADDRESS=.*/$(ENV_VAR_PREFIX)_TOKEN_ADDRESS='$$ADDRESS'/' .env && rm .env.bak; \
+		echo "Deployment complete. $(ENV_VAR_PREFIX)_TOKEN_ADDRESS updated to $$ADDRESS"; \
 	else \
 		echo "Failed to extract deployed address"; \
 		exit 1; \
 	fi
 
-.PHONY: deploy-teleporter-dispatch
-deploy-teleporter-dispatch: setup-env
-	@echo "Deploying TeleporterERC20 to Fuji Dispatch..."
-	@CHAIN_NAME=fuji-dispatch forge script script/DeployTeleporterERC20.s.sol:DeployTeleporterERC20Script \
-		--rpc-url fuji-dispatch --broadcast -vvv | tee deploy_output.log
-	@ADDRESS=$$(grep 'TeleporterERC20 deployed to:' deploy_output.log | awk '{print $$4}'); \
-	if [ -n "$$ADDRESS" ]; then \
-		sed -i.bak 's/^FUJI_DISPATCH_TOKEN_ADDRESS=.*/FUJI_DISPATCH_TOKEN_ADDRESS='"$$ADDRESS"'/' .env && rm .env.bak; \
-		echo "Deployment complete. FUJI_DISPATCH_TOKEN_ADDRESS updated to $$ADDRESS"; \
-	else \
-		echo "Failed to extract deployed address"; \
+# SimpleSenderのデプロイ
+.PHONY: deploy-sender
+deploy-sender: setup-env
+	@if [ -z "$(filter c-chain local-l1,$(MAKECMDGOALS))" ]; then \
+		echo "Usage: make deploy-sender [c-chain|local-l1]"; \
 		exit 1; \
 	fi
-
-.PHONY: deploy-sender-c
-deploy-sender-c: setup-env
-	@echo "Deploying SimpleSender to Fuji C-Chain..."
-	@CONTRACT_TYPE=sender forge script script/DeploySimpleContracts.s.sol:DeploySimpleContractsScript \
-		--rpc-url fuji-c --broadcast -vvv | tee deploy_output.log
+	$(eval TARGET_CHAIN := $(filter c-chain local-l1,$(MAKECMDGOALS)))
+	$(call get_chain_config,$(TARGET_CHAIN))
+	@echo "Deploying SimpleSender to $(CHAIN_DISPLAY)..."
+	@CONTRACT_TYPE=sender DEPLOY_PK=$(DEPLOY_PK) CHAIN_NAME=$(CHAIN_NAME) forge script script/DeploySimpleContracts.s.sol:DeploySimpleContractsScript \
+		--rpc-url $(RPC_URL) --broadcast -vvv | tee deploy_output.log
 	@ADDRESS=$$(grep 'SimpleSender deployed to:' deploy_output.log | awk '{print $$4}'); \
 	if [ -n "$$ADDRESS" ]; then \
-		sed -i.bak 's/^FUJI_C_SIMPLE_SENDER_CONTRACT_ADDRESS=.*/FUJI_C_SIMPLE_SENDER_CONTRACT_ADDRESS='"$$ADDRESS"'/' .env && rm .env.bak; \
-		echo "Deployment complete. FUJI_C_SIMPLE_SENDER_CONTRACT_ADDRESS updated to $$ADDRESS"; \
+		sed -i.bak 's/^$(ENV_VAR_PREFIX)_SIMPLE_SENDER_CONTRACT_ADDRESS=.*/$(ENV_VAR_PREFIX)_SIMPLE_SENDER_CONTRACT_ADDRESS='$$ADDRESS'/' .env && rm .env.bak; \
+		echo "Deployment complete. $(ENV_VAR_PREFIX)_SIMPLE_SENDER_CONTRACT_ADDRESS updated to $$ADDRESS"; \
 	else \
 		echo "Failed to extract deployed address"; \
 		exit 1; \
 	fi
 
-.PHONY: deploy-receiver-dispatch
-deploy-receiver-dispatch: setup-env
-	@echo "Deploying SimpleReceiver to Fuji Dispatch..."
-	@CONTRACT_TYPE=receiver forge script script/DeploySimpleContracts.s.sol:DeploySimpleContractsScript \
-		--rpc-url fuji-dispatch --broadcast -vvv | tee deploy_output.log
+# SimpleReceiverのデプロイ
+.PHONY: deploy-receiver
+deploy-receiver: setup-env
+	@if [ -z "$(filter dispatch local-l2,$(MAKECMDGOALS))" ]; then \
+		echo "Usage: make deploy-receiver [dispatch|local-l2]"; \
+		exit 1; \
+	fi
+	$(eval TARGET_CHAIN := $(filter dispatch local-l2,$(MAKECMDGOALS)))
+	$(call get_chain_config,$(TARGET_CHAIN))
+	@echo "Deploying SimpleReceiver to $(CHAIN_DISPLAY)..."
+	@CONTRACT_TYPE=receiver DEPLOY_PK=$(DEPLOY_PK) CHAIN_NAME=$(CHAIN_NAME) forge script script/DeploySimpleContracts.s.sol:DeploySimpleContractsScript \
+		--rpc-url $(RPC_URL) --broadcast -vvv | tee deploy_output.log
 	@ADDRESS=$$(grep 'SimpleReceiver deployed to:' deploy_output.log | awk '{print $$4}'); \
 	if [ -n "$$ADDRESS" ]; then \
-		sed -i.bak 's/^FUJI_DISPATCH_SIMPLE_RECEIVER_CONTRACT_ADDRESS=.*/FUJI_DISPATCH_SIMPLE_RECEIVER_CONTRACT_ADDRESS='"$$ADDRESS"'/' .env && rm .env.bak; \
-		echo "Deployment complete. FUJI_DISPATCH_SIMPLE_RECEIVER_CONTRACT_ADDRESS updated to $$ADDRESS"; \
+		sed -i.bak 's/^$(ENV_VAR_PREFIX)_SIMPLE_RECEIVER_CONTRACT_ADDRESS=.*/$(ENV_VAR_PREFIX)_SIMPLE_RECEIVER_CONTRACT_ADDRESS='$$ADDRESS'/' .env && rm .env.bak; \
+		echo "Deployment complete. $(ENV_VAR_PREFIX)_SIMPLE_RECEIVER_CONTRACT_ADDRESS updated to $$ADDRESS"; \
 	else \
 		echo "Failed to extract deployed address"; \
 		exit 1; \
 	fi
 
-# トークン操作コマンド
-.PHONY: mint-c
-mint-c:
-	@echo "Minting tokens on Fuji C-Chain..."
-	@cast send --rpc-url fuji-c --private-key "$(PK)" "$(FUJI_C_TOKEN_ADDRESS)" \
+# トークンのmint
+.PHONY: mint
+mint:
+	@if [ -z "$(filter c-chain dispatch local-l1 local-l2,$(MAKECMDGOALS))" ]; then \
+		echo "Usage: make mint [c-chain|dispatch|local-l1|local-l2]"; \
+		exit 1; \
+	fi
+	$(eval TARGET_CHAIN := $(filter c-chain dispatch local-l1 local-l2,$(MAKECMDGOALS)))
+	$(call get_chain_config,$(TARGET_CHAIN))
+	@echo "Minting tokens on $(CHAIN_DISPLAY)..."
+	@cast send --rpc-url $(RPC_URL) --private-key "$(DEPLOY_PK)" "$(TOKEN_ADDRESS)" \
 		"mint(address,uint256)" "$(SENDER_ADDRESS)" 100000000000000000000
 
-.PHONY: mint-dispatch
-mint-dispatch:
-	@echo "Minting tokens on Fuji Dispatch..."
-	@cast send --rpc-url fuji-dispatch --private-key "$(PK)" "$(FUJI_DISPATCH_TOKEN_ADDRESS)" \
-		"mint(address,uint256)" "$(SENDER_ADDRESS)" 100000000000000000000
-
-.PHONY: balance-c
-balance-c:
-	@echo "Checking balance on Fuji C-Chain..."
-	@if [ -n "$(filter-out $@,$(MAKECMDGOALS))" ]; then \
-		ADDR="$(filter-out $@,$(MAKECMDGOALS))"; \
+# 残高確認
+.PHONY: balance
+balance:
+	@if [ -z "$(filter c-chain dispatch local-l1 local-l2,$(word 2,$(MAKECMDGOALS)))" ]; then \
+		echo "Usage: make balance [c-chain|dispatch|local-l1|local-l2] [address]"; \
+		exit 1; \
+	fi
+	$(eval TARGET_CHAIN := $(word 2,$(MAKECMDGOALS)))
+	$(eval ADDRESS_ARG := $(word 3,$(MAKECMDGOALS)))
+	$(call get_chain_config,$(TARGET_CHAIN))
+	@echo "Checking balance on $(CHAIN_DISPLAY)..."
+	@if [ -z "$(TOKEN_ADDRESS)" ]; then \
+		echo "Error: Token address not set. Deploy the token first."; \
+		exit 1; \
+	fi
+	@if [ -n "$(ADDRESS_ARG)" ]; then \
+		ADDR="$(ADDRESS_ARG)"; \
 	else \
-		ADDR=$${ADDRESS:-$(SENDER_ADDRESS)}; \
+		ADDR="$(SENDER_ADDRESS)"; \
 	fi; \
-	cast call --rpc-url fuji-c "$(FUJI_C_TOKEN_ADDRESS)" \
+	echo "Checking balance of $$ADDR..."; \
+	cast call --rpc-url $(RPC_URL) "$(TOKEN_ADDRESS)" \
 		"balanceOf(address)(uint256)" "$$ADDR"
 
-# Prevent treating arguments as targets
-%:
-	@:
-
-.PHONY: balance-dispatch
-balance-dispatch:
-	@echo "Checking balance on Fuji Dispatch..."
-	@if [ -n "$(filter-out $@,$(MAKECMDGOALS))" ]; then \
-		ADDR="$(filter-out $@,$(MAKECMDGOALS))"; \
-	else \
-		ADDR=$${ADDRESS:-$(SENDER_ADDRESS)}; \
-	fi; \
-	cast call --rpc-url fuji-dispatch "$(FUJI_DISPATCH_TOKEN_ADDRESS)" \
-		"balanceOf(address)(uint256)" "$$ADDR"
-
-.PHONY: send-tokens-c-to-dispatch
-send-tokens-c-to-dispatch:
-	@echo "Sending tokens from Fuji C-Chain to Dispatch..."
-	@cast send --rpc-url fuji-c --private-key "$(PK)" "$(FUJI_C_TOKEN_ADDRESS)" \
+# トークン送信
+.PHONY: send-tokens
+send-tokens:
+	@if [ -z "$(word 2,$(MAKECMDGOALS))" ] || [ -z "$(word 3,$(MAKECMDGOALS))" ]; then \
+		echo "Usage: make send-tokens [from-chain] [to-chain]"; \
+		echo "  Chains: c-chain, dispatch, local-l1, local-l2"; \
+		exit 1; \
+	fi
+	$(eval FROM_CHAIN := $(word 2,$(MAKECMDGOALS)))
+	$(eval TO_CHAIN := $(word 3,$(MAKECMDGOALS)))
+	$(call get_chain_config,$(FROM_CHAIN))
+	$(eval FROM_TOKEN := $(TOKEN_ADDRESS))
+	$(eval FROM_RPC := $(RPC_URL))
+	$(eval FROM_PK := $(DEPLOY_PK))
+	$(eval FROM_DISPLAY := $(CHAIN_DISPLAY))
+	$(eval FROM_ADDR := $(RECEIVER_ADDRESS))
+	$(call get_chain_config,$(TO_CHAIN))
+	$(eval TO_TOKEN := $(TOKEN_ADDRESS))
+	$(eval TO_BLOCKCHAIN_ID := $(BLOCKCHAIN_ID))
+	$(eval TO_DISPLAY := $(CHAIN_DISPLAY))
+	@echo "Sending tokens from $(FROM_DISPLAY) to $(TO_DISPLAY)..."
+	@cast send --rpc-url $(FROM_RPC) --private-key "$(FROM_PK)" "$(FROM_TOKEN)" \
 		"sendTokens(bytes32,address,address,uint256)" \
-		"$(FUJI_DISPATCH_BLOCKCHAIN_ID_HEX)" "$(FUJI_DISPATCH_TOKEN_ADDRESS)" "$(RECEIVER_ADDRESS)" 10000000000000000000
+		"$(TO_BLOCKCHAIN_ID)" "$(TO_TOKEN)" "$(FROM_ADDR)" 10000000000000000000
 
-.PHONY: send-tokens-dispatch-to-c
-send-tokens-dispatch-to-c:
-	@echo "Sending tokens from Fuji Dispatch to C-Chain..."
-	@cast send --rpc-url fuji-dispatch --private-key "$(PK)" "$(FUJI_DISPATCH_TOKEN_ADDRESS)" \
-		"sendTokens(bytes32,address,address,uint256)" \
-		"$(FUJI_C_CHAIN_BLOCKCHAIN_ID_HEX)" "$(FUJI_C_TOKEN_ADDRESS)" "$(RECEIVER_ADDRESS)" 10000000000000000000
-
-# シンプルメッセージ送信コマンド
-.PHONY: send-message-c-to-dispatch
-send-message-c-to-dispatch:
-	@echo "Sending message from Fuji C-Chain to Dispatch..."
-	@cast send --rpc-url fuji-c --private-key "$(PK)" "$(FUJI_C_SIMPLE_SENDER_CONTRACT_ADDRESS)" \
+# シンプルメッセージ送信
+.PHONY: send-message
+send-message:
+	@if [ -z "$(word 2,$(MAKECMDGOALS))" ] || [ -z "$(word 3,$(MAKECMDGOALS))" ]; then \
+		echo "Usage: make send-message [from-chain] [to-chain]"; \
+		echo "  From chains: c-chain, local-l1"; \
+		echo "  To chains: dispatch, local-l2"; \
+		exit 1; \
+	fi
+	$(eval FROM_CHAIN := $(word 2,$(MAKECMDGOALS)))
+	$(eval TO_CHAIN := $(word 3,$(MAKECMDGOALS)))
+	$(call get_chain_config,$(FROM_CHAIN))
+	$(eval FROM_RPC := $(RPC_URL))
+	$(eval FROM_PK := $(DEPLOY_PK))
+	$(eval FROM_SENDER := $(SENDER_CONTRACT))
+	$(eval FROM_DISPLAY := $(CHAIN_DISPLAY))
+	$(call get_chain_config,$(TO_CHAIN))
+	$(eval TO_RECEIVER := $(RECEIVER_CONTRACT))
+	$(eval TO_BLOCKCHAIN_ID := $(BLOCKCHAIN_ID))
+	$(eval TO_DISPLAY := $(CHAIN_DISPLAY))
+	@MSG="Hello from $(FROM_DISPLAY)!"; \
+	echo "Sending message from $(FROM_DISPLAY) to $(TO_DISPLAY)..."; \
+	cast send --rpc-url $(FROM_RPC) --private-key "$(FROM_PK)" "$(FROM_SENDER)" \
 		"sendMessage(bytes32,address,string)" \
-		"$(FUJI_DISPATCH_BLOCKCHAIN_ID_HEX)" "$(FUJI_DISPATCH_SIMPLE_RECEIVER_CONTRACT_ADDRESS)" "Hello from C-Chain!"
+		"$(TO_BLOCKCHAIN_ID)" "$(TO_RECEIVER)" "$$MSG"
 
-.PHONY: check-message-dispatch
-check-message-dispatch:
-	@echo "Checking last message on Fuji Dispatch..."
-	@cast call --rpc-url fuji-dispatch "$(FUJI_DISPATCH_SIMPLE_RECEIVER_CONTRACT_ADDRESS)" "lastMessage()(string)"
-
-# トークンコントラクトのデプロイ
-.PHONY: deploy-tokens
-deploy-tokens: deploy-teleporter-c deploy-teleporter-dispatch
-	@echo "Token contracts deployed!"
-	@echo ""
-	@echo "Deployed token contract addresses have been updated in .env file."
-
-# シンプルコントラクトのデプロイ
-.PHONY: deploy-simple-contracts
-deploy-simple-contracts: deploy-sender-c deploy-receiver-dispatch
-	@echo "Simple contracts deployed!"
-	@echo ""
-	@echo "Deployed simple contract addresses have been updated in .env file."
+# メッセージ確認
+.PHONY: check-message
+check-message:
+	@if [ -z "$(filter dispatch local-l2,$(MAKECMDGOALS))" ]; then \
+		echo "Usage: make check-message [dispatch|local-l2]"; \
+		exit 1; \
+	fi
+	$(eval TARGET_CHAIN := $(filter dispatch local-l2,$(MAKECMDGOALS)))
+	$(call get_chain_config,$(TARGET_CHAIN))
+	@echo "Checking last message on $(CHAIN_DISPLAY)..."
+	@cast call --rpc-url $(RPC_URL) "$(RECEIVER_CONTRACT)" "lastMessage()(string)"
 
 # 全コントラクトのデプロイ
 .PHONY: deploy-all
-deploy-all: deploy-tokens deploy-simple-contracts
-	@echo "All contracts deployed!"
-	@echo ""
-	@echo "All contract addresses have been updated in .env file."
+deploy-all:
+	@if [ -z "$(filter fuji local,$(MAKECMDGOALS))" ]; then \
+		echo "Usage: make deploy-all [fuji|local]"; \
+		exit 1; \
+	fi
+	@if [ "$(filter fuji,$(MAKECMDGOALS))" ]; then \
+		$(MAKE) deploy-token c-chain; \
+		$(MAKE) deploy-token dispatch; \
+		$(MAKE) deploy-sender c-chain; \
+		$(MAKE) deploy-receiver dispatch; \
+		echo "All Fuji testnet contracts deployed!"; \
+	elif [ "$(filter local,$(MAKECMDGOALS))" ]; then \
+		$(MAKE) deploy-token local-l1; \
+		$(MAKE) deploy-token local-l2; \
+		$(MAKE) deploy-sender local-l1; \
+		$(MAKE) deploy-receiver local-l2; \
+		echo "All local contracts deployed!"; \
+	fi
 
+# Makeが引数をターゲットとして扱わないようにする
+%:
+	@:
 
 # ヘルプ
 .PHONY: help
 help:
-	@echo "Available commands:"
+	@echo "ICM ERC20 Project Commands"
 	@echo ""
 	@echo "Basic commands:"
 	@echo "  make build                    - Build contracts"
@@ -205,25 +305,30 @@ help:
 	@echo "  make clean                    - Clean build artifacts"
 	@echo ""
 	@echo "Deployment commands:"
-	@echo "  make deploy-all               - Deploy all contracts"
-	@echo "  make deploy-tokens            - Deploy only TeleporterERC20 token contracts"
-	@echo "  make deploy-simple-contracts  - Deploy only SimpleSender/SimpleReceiver contracts"
-	@echo "  make deploy-teleporter-c      - Deploy TeleporterERC20 to Fuji C-Chain"
-	@echo "  make deploy-teleporter-dispatch - Deploy TeleporterERC20 to Fuji Dispatch"
-	@echo "  make deploy-sender-c          - Deploy SimpleSender to Fuji C-Chain"
-	@echo "  make deploy-receiver-dispatch - Deploy SimpleReceiver to Fuji Dispatch"
+	@echo "  make deploy-all fuji          - Deploy all contracts to Fuji testnet"
+	@echo "  make deploy-all local         - Deploy all contracts to local chains"
+	@echo "  make deploy-token [chain]     - Deploy TeleporterERC20 token contract"
+	@echo "  make deploy-sender [chain]    - Deploy SimpleSender contract"
+	@echo "  make deploy-receiver [chain]  - Deploy SimpleReceiver contract"
 	@echo ""
 	@echo "Token operations:"
-	@echo "  make mint-c                   - Mint tokens on Fuji C-Chain"
-	@echo "  make mint-dispatch            - Mint tokens on Fuji Dispatch"
-	@echo "  make balance-c                - Check balance on Fuji C-Chain"
-	@echo "  make balance-dispatch         - Check balance on Fuji Dispatch"
-	@echo "  make send-tokens-c-to-dispatch - Send tokens from C-Chain to Dispatch"
-	@echo "  make send-tokens-dispatch-to-c - Send tokens from Dispatch to C-Chain"
+	@echo "  make mint [chain]             - Mint 100 tokens"
+	@echo "  make balance [chain] [addr]   - Check token balance"
+	@echo "  make send-tokens [from] [to]  - Send 10 tokens between chains"
 	@echo ""
-	@echo "Simple message operations:"
-	@echo "  make send-message-c-to-dispatch - Send message from C-Chain to Dispatch"
-	@echo "  make check-message-dispatch     - Check last message on Dispatch"
+	@echo "Message operations:"
+	@echo "  make send-message [from] [to] - Send a test message"
+	@echo "  make check-message [chain]    - Check last received message"
 	@echo ""
-	@echo "Environment setup:"
-	@echo "  make setup-env                - Set up environment files"
+	@echo "Available chains:"
+	@echo "  c-chain    - Fuji C-Chain"
+	@echo "  dispatch   - Fuji Dispatch"
+	@echo "  local-l1   - Local L1 chain"
+	@echo "  local-l2   - Local L2 chain"
+	@echo ""
+	@echo "Examples:"
+	@echo "  make deploy-all fuji"
+	@echo "  make mint c-chain"
+	@echo "  make balance local-l1 0x1234..."
+	@echo "  make send-tokens c-chain dispatch"
+	@echo "  make send-message local-l1 local-l2"

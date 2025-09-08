@@ -29,81 +29,167 @@ make build
 make test
 ```
 
-## 自動デプロイとコマンド実行
+## コマンド実行方法
+
+全てのコマンドは引数でチェーンを指定する方式に統一されています。
+
+### 利用可能なチェーン
+
+- `c-chain` - Fuji C-Chain
+- `dispatch` - Fuji Dispatch
+- `local-l1` - ローカルL1チェーン
+- `local-l2` - ローカルL2チェーン
 
 ### コントラクトのデプロイ
 
-```bash
-# 全てのコントラクトをデプロイ
-make deploy-all
-
-# トークンコントラクトのみデプロイ
-make deploy-tokens
-
-# SimpleSender/SimpleReceiverコントラクトのみデプロイ
-make deploy-simple-contracts
-
-# ※ デプロイ後、アドレスは自動的に.envファイルに更新されます
-```
-
-### 個別デプロイ
+#### 全てのコントラクトをデプロイ
 
 ```bash
-# TeleporterERC20のデプロイ
-# Fuji C-Chain
-make deploy-teleporter-c
-# Fuji Dispatch
-make deploy-teleporter-dispatch
+# Fujiテストネットへデプロイ
+make deploy-all fuji
 
-# SimpleSender/SimpleReceiverのデプロイ
-# SimpleSender on Fuji C-Chain
-make deploy-sender-c
-SimpleReceiver on Fuji Dispatch
-make deploy-receiver-dispatch
+# ローカルチェーンへデプロイ
+make deploy-all local
 ```
+
+#### 個別のコントラクトをデプロイ
+
+```bash
+# TeleporterERC20トークンをデプロイ
+make deploy-token c-chain
+make deploy-token dispatch
+make deploy-token local-l1
+make deploy-token local-l2
+
+# SimpleSenderをデプロイ（送信元チェーンのみ）
+make deploy-sender c-chain
+make deploy-sender local-l1
+
+# SimpleReceiverをデプロイ（受信先チェーンのみ）
+make deploy-receiver dispatch
+make deploy-receiver local-l2
+```
+
+デプロイ後、アドレスは自動的に.envファイルに更新されます。
 
 ### トークン操作
 
+#### Mint（100トークン）
+
 ```bash
-# Mint
-# Fuji C-Chainでmint (100トークン)
-make mint-c
-# Fuji Dispatchでmint (100トークン)
-make mint-dispatch
+make mint c-chain
+make mint dispatch
+make mint local-l1
+make mint local-l2
+```
 
-# 残高確認
-# Fuji C-Chainの残高（デフォルトはSENDER_ADDRESS）
-make balance-c
-# 特定のアドレスの残高を確認
-make balance-c 0x1234...
-# または環境変数で指定
-ADDRESS=0x1234... make balance-c
+#### 残高確認
 
-# Fuji Dispatchの残高（デフォルトはSENDER_ADDRESS）
-make balance-dispatch
-# 特定のアドレスの残高を確認
-make balance-dispatch 0x1234...
-# または環境変数で指定
-ADDRESS=0x1234... make balance-dispatch
+```bash
+# デフォルトアドレス（SENDER_ADDRESS）の残高確認
+make balance c-chain
+make balance local-l1
 
-# クロスチェーン転送
-# C-Chain → Dispatch (10トークン)
-make send-tokens-c-to-dispatch
-# Dispatch → C-Chain (10トークン)
-make send-tokens-dispatch-to-c
+# 特定アドレスの残高確認
+make balance c-chain 0x1234...
+make balance local-l2 0x5678...
+```
+
+#### クロスチェーン転送（10トークン）
+
+```bash
+# Fujiテストネット間
+make send-tokens c-chain dispatch
+make send-tokens dispatch c-chain
+
+# ローカルチェーン間
+make send-tokens local-l1 local-l2
+make send-tokens local-l2 local-l1
+
+# クロス環境転送も可能（設定が正しければ）
+make send-tokens c-chain local-l1
 ```
 
 ### シンプルメッセージ送信
 
-```bash
-# メッセージ送信
-make send-message-c-to-dispatch
+#### メッセージ送信
 
-# 受信確認
-make check-message-dispatch
+```bash
+# Fujiテストネット
+make send-message c-chain dispatch
+
+# ローカルチェーン
+make send-message local-l1 local-l2
 ```
 
-## 手動実行方法
+#### メッセージ確認
+
+```bash
+make check-message dispatch
+make check-message local-l2
+```
+
+## ローカルL1環境での実行
+
+### 前提条件
+
+2つのローカルL1を起動し、ICMを有効化する必要があります。
+
+```bash
+# L1の作成（例）
+avalanche blockchain create myL1
+avalanche blockchain create myL2
+
+# ローカルにデプロイ（ICMを有効化）
+avalanche blockchain deploy myL1 --local
+avalanche blockchain deploy myL2 --local
+
+# ICMの設定（相互接続）
+# デプロイ後に表示される情報をもとにICMを設定
+```
+
+### 環境変数の設定
+
+.envファイルにローカルL1の設定を追加：
+
+```bash
+# avalanche blockchain describeコマンドでRPC URLとBlockchain IDを確認
+avalanche blockchain describe myL1
+avalanche blockchain describe myL2
+
+# .envファイルを更新
+# LOCAL_L1_RPC_URL=http://127.0.0.1:9650/ext/bc/{L1のBlockchainID}/rpc
+# LOCAL_L2_RPC_URL=http://127.0.0.1:9650/ext/bc/{L2のBlockchainID}/rpc
+# LOCAL_L1_BLOCKCHAIN_ID_HEX=0x{L1のBlockchainIDの16進数}
+# LOCAL_L2_BLOCKCHAIN_ID_HEX=0x{L2のBlockchainIDの16進数}
+```
+
+**重要**: ローカル環境では、自動的にAvalancheのプリファンドされたテストアカウント（ewoqキー）が使用されます。.envファイルの`PK`は使用されません。
+
+### ローカル環境でのコマンド実行例
+
+```bash
+# 全てのコントラクトをデプロイ
+make deploy-all local
+
+# トークンをmint
+make mint local-l1
+make mint local-l2
+
+# 残高確認
+make balance local-l1
+make balance local-l2
+
+# クロスチェーン転送
+make send-tokens local-l1 local-l2
+make send-tokens local-l2 local-l1
+
+# メッセージ送信と確認
+make send-message local-l1 local-l2
+make check-message local-l2
+```
+
+## 手動実行方法（参考）
 
 ### 環境変数読み込み
 
@@ -111,45 +197,19 @@ make check-message-dispatch
 source .env
 ```
 
-### 残高の確認
+### トークンのデプロイ（手動）
 
 ```bash
-# Check balance on Fuji C-Chain
-cast balance $FUNDED_ADDRESS --rpc-url fuji-c
-
-# Check balance on Dispatch
-cast balance $FUNDED_ADDRESS --rpc-url fuji-dispatch
-```
-
-### デプロイ (手動)
-
-- Fuji C
-
-```bash
+# Fuji C-Chain
 forge create --rpc-url fuji-c --private-key $PK src/TeleporterERC20.sol:TeleporterERC20 --broadcast --constructor-args "FujiCToken" "FCT" "0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf"
-```
 
-- Fuji Dispatch
-
-```bash
+# Fuji Dispatch
 forge create --rpc-url fuji-dispatch --private-key $PK src/TeleporterERC20.sol:TeleporterERC20 --broadcast --constructor-args "FujiDispatchToken" "FDT" "0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf"
 ```
 
-### トークン操作 (手動)
+### トークン操作（手動）
 
-環境変数にデプロイしたアドレスが設定されている前提（.envファイルに自動更新されます）：
-
-**ウォレットアドレス:**
-- `SENDER_ADDRESS`: トークン送付元のウォレットアドレス
-- `RECEIVER_ADDRESS`: トークン送付先のウォレットアドレス
-
-**TeleporterERC20トークンコントラクト:**
-- `FUJI_C_TOKEN_ADDRESS`: Fuji C-Chain上のTeleporterERC20トークンコントラクト
-- `FUJI_DISPATCH_TOKEN_ADDRESS`: Fuji Dispatch上のTeleporterERC20トークンコントラクト
-
-**SimpleSender/SimpleReceiverコントラクト:**
-- `FUJI_C_SIMPLE_SENDER_CONTRACT_ADDRESS`: Fuji C-Chain上のSimpleSenderコントラクト
-- `FUJI_DISPATCH_SIMPLE_RECEIVER_CONTRACT_ADDRESS`: Fuji Dispatch上のSimpleReceiverコントラクト
+環境変数にデプロイしたアドレスが設定されている前提：
 
 ```bash
 # Mint on Fuji C-Chain
@@ -176,25 +236,19 @@ make help  # 全コマンドの一覧を表示
 - `make clean` - ビルドアーティファクトのクリーン
 
 ### デプロイコマンド
-- `make deploy-all` - 全コントラクトのデプロイ
-- `make deploy-tokens` - TeleporterERC20トークンコントラクトのみデプロイ
-- `make deploy-simple-contracts` - SimpleSender/SimpleReceiverコントラクトのみデプロイ
-- `make deploy-teleporter-c` - TeleporterERC20をFuji C-Chainにデプロイ
-- `make deploy-teleporter-dispatch` - TeleporterERC20をFuji Dispatchにデプロイ
-- `make deploy-sender-c` - SimpleSenderをFuji C-Chainにデプロイ
-- `make deploy-receiver-dispatch` - SimpleReceiverをFuji Dispatchにデプロイ
+- `make deploy-all [fuji|local]` - 全コントラクトのデプロイ
+- `make deploy-token [chain]` - TeleporterERC20トークンコントラクトのデプロイ
+- `make deploy-sender [chain]` - SimpleSenderコントラクトのデプロイ
+- `make deploy-receiver [chain]` - SimpleReceiverコントラクトのデプロイ
 
 ### トークン操作
-- `make mint-c` - Fuji C-Chainでトークンをmint
-- `make mint-dispatch` - Fuji Dispatchでトークンをmint
-- `make balance-c` - Fuji C-Chainの残高確認
-- `make balance-dispatch` - Fuji Dispatchの残高確認
-- `make send-tokens-c-to-dispatch` - C-ChainからDispatchへトークン送信
-- `make send-tokens-dispatch-to-c` - DispatchからC-Chainへトークン送信
+- `make mint [chain]` - 100トークンをmint
+- `make balance [chain] [address]` - 残高確認
+- `make send-tokens [from-chain] [to-chain]` - 10トークンを転送
 
 ### メッセージ操作
-- `make send-message-c-to-dispatch` - C-ChainからDispatchへメッセージ送信
-- `make check-message-dispatch` - Dispatchで最後のメッセージを確認
+- `make send-message [from-chain] [to-chain]` - テストメッセージを送信
+- `make check-message [chain]` - 最後に受信したメッセージを確認
 
 ## Faucet
 
