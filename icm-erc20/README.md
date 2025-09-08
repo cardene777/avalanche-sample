@@ -37,8 +37,8 @@ make test
 
 - `c-chain` - Fuji C-Chain
 - `dispatch` - Fuji Dispatch
-- `local-l1` - ローカルL1チェーン
-- `local-l2` - ローカルL2チェーン
+- `l1-1` - ローカルL1チェーン 1
+- `l1-2` - ローカルL1チェーン 2
 
 ### コントラクトのデプロイ
 
@@ -58,16 +58,16 @@ make deploy-all local
 # TeleporterERC20トークンをデプロイ
 make deploy-token c-chain
 make deploy-token dispatch
-make deploy-token local-l1
-make deploy-token local-l2
+make deploy-token l1-1
+make deploy-token l1-2
 
 # SimpleSenderをデプロイ（送信元チェーンのみ）
 make deploy-sender c-chain
-make deploy-sender local-l1
+make deploy-sender l1-1
 
 # SimpleReceiverをデプロイ（受信先チェーンのみ）
 make deploy-receiver dispatch
-make deploy-receiver local-l2
+make deploy-receiver l1-2
 ```
 
 デプロイ後、アドレスは自動的に.envファイルに更新されます。
@@ -79,8 +79,8 @@ make deploy-receiver local-l2
 ```bash
 make mint c-chain
 make mint dispatch
-make mint local-l1
-make mint local-l2
+make mint l1-1
+make mint l1-2
 ```
 
 #### 残高確認
@@ -88,11 +88,11 @@ make mint local-l2
 ```bash
 # デフォルトアドレス（SENDER_ADDRESS）の残高確認
 make balance c-chain
-make balance local-l1
+make balance l1-1
 
 # 特定アドレスの残高確認
 make balance c-chain 0x1234...
-make balance local-l2 0x5678...
+make balance l1-2 0x5678...
 ```
 
 #### クロスチェーン転送（10トークン）
@@ -103,11 +103,11 @@ make send-tokens c-chain dispatch
 make send-tokens dispatch c-chain
 
 # ローカルチェーン間
-make send-tokens local-l1 local-l2
-make send-tokens local-l2 local-l1
+make send-tokens l1-1 l1-2
+make send-tokens l1-2 l1-1
 
 # クロス環境転送も可能（設定が正しければ）
-make send-tokens c-chain local-l1
+make send-tokens c-chain l1-1
 ```
 
 ### シンプルメッセージ送信
@@ -119,14 +119,14 @@ make send-tokens c-chain local-l1
 make send-message c-chain dispatch
 
 # ローカルチェーン
-make send-message local-l1 local-l2
+make send-message l1-1 l1-2
 ```
 
 #### メッセージ確認
 
 ```bash
 make check-message dispatch
-make check-message local-l2
+make check-message l1-2
 ```
 
 ## ローカルL1環境での実行
@@ -158,10 +158,10 @@ avalanche blockchain describe myL1
 avalanche blockchain describe myL2
 
 # .envファイルを更新
-# LOCAL_L1_RPC_URL=http://127.0.0.1:9650/ext/bc/{L1のBlockchainID}/rpc
-# LOCAL_L2_RPC_URL=http://127.0.0.1:9650/ext/bc/{L2のBlockchainID}/rpc
-# LOCAL_L1_BLOCKCHAIN_ID_HEX=0x{L1のBlockchainIDの16進数}
-# LOCAL_L2_BLOCKCHAIN_ID_HEX=0x{L2のBlockchainIDの16進数}
+# LOCAL_L1_1_RPC_URL=http://127.0.0.1:9650/ext/bc/{L1-1のBlockchainID}/rpc
+# LOCAL_L1_2_RPC_URL=http://127.0.0.1:9650/ext/bc/{L1-2のBlockchainID}/rpc
+# LOCAL_L1_1_BLOCKCHAIN_ID_HEX=0x{L1-1のBlockchainIDの16進数}
+# LOCAL_L1_2_BLOCKCHAIN_ID_HEX=0x{L1-2のBlockchainIDの16進数}
 ```
 
 **重要**: ローカル環境では、自動的にAvalancheのプリファンドされたテストアカウント（ewoqキー）が使用されます。.envファイルの`PK`は使用されません。
@@ -173,20 +173,20 @@ avalanche blockchain describe myL2
 make deploy-all local
 
 # トークンをmint
-make mint local-l1
-make mint local-l2
+make mint l1-1
+make mint l1-2
 
 # 残高確認
-make balance local-l1
-make balance local-l2
+make balance l1-1
+make balance l1-2
 
 # クロスチェーン転送
-make send-tokens local-l1 local-l2
-make send-tokens local-l2 local-l1
+make send-tokens l1-1 l1-2
+make send-tokens l1-2 l1-1
 
 # メッセージ送信と確認
-make send-message local-l1 local-l2
-make check-message local-l2
+make send-message l1-1 l1-2
+make check-message l1-2
 ```
 
 ## 手動実行方法（参考）
