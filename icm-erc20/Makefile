@@ -78,40 +78,40 @@ define get_chain_config
 		$(eval ENV_VAR_PREFIX := FUJI_DISPATCH)
 		$(eval CHAIN_DISPLAY := Fuji Dispatch)
 	)
-	$(if $(filter local-l1,$(CHAIN)),
+	$(if $(filter l1-1,$(CHAIN)),
 		$(eval CHAIN_NAME := local-l1)
-		$(eval TOKEN_ADDRESS := $(LOCAL_L1_TOKEN_ADDRESS))
-		$(eval BLOCKCHAIN_ID := $(LOCAL_L1_BLOCKCHAIN_ID_HEX))
-		$(eval SENDER_CONTRACT := $(LOCAL_L1_SIMPLE_SENDER_CONTRACT_ADDRESS))
+		$(eval TOKEN_ADDRESS := $(LOCAL_L1_1_TOKEN_ADDRESS))
+		$(eval BLOCKCHAIN_ID := $(LOCAL_L1_1_BLOCKCHAIN_ID_HEX))
+		$(eval SENDER_CONTRACT := $(LOCAL_L1_1_SIMPLE_SENDER_CONTRACT_ADDRESS))
 		$(eval RPC_URL := local-l1)
 		$(eval DEPLOY_PK := $(EWOQ_PRIVATE_KEY))
 		$(eval SENDER_ADDRESS := $(EWOQ_ADDRESS))
 		$(eval RECEIVER_ADDRESS := $(EWOQ_ADDRESS))
-		$(eval ENV_VAR_PREFIX := LOCAL_L1)
-		$(eval CHAIN_DISPLAY := Local L1)
+		$(eval ENV_VAR_PREFIX := LOCAL_L1_1)
+		$(eval CHAIN_DISPLAY := L1-1)
 	)
-	$(if $(filter local-l2,$(CHAIN)),
+	$(if $(filter l1-2,$(CHAIN)),
 		$(eval CHAIN_NAME := local-l2)
-		$(eval TOKEN_ADDRESS := $(LOCAL_L2_TOKEN_ADDRESS))
-		$(eval BLOCKCHAIN_ID := $(LOCAL_L2_BLOCKCHAIN_ID_HEX))
-		$(eval RECEIVER_CONTRACT := $(LOCAL_L2_SIMPLE_RECEIVER_CONTRACT_ADDRESS))
+		$(eval TOKEN_ADDRESS := $(LOCAL_L1_2_TOKEN_ADDRESS))
+		$(eval BLOCKCHAIN_ID := $(LOCAL_L1_2_BLOCKCHAIN_ID_HEX))
+		$(eval RECEIVER_CONTRACT := $(LOCAL_L1_2_SIMPLE_RECEIVER_CONTRACT_ADDRESS))
 		$(eval RPC_URL := local-l2)
 		$(eval DEPLOY_PK := $(EWOQ_PRIVATE_KEY))
 		$(eval SENDER_ADDRESS := $(EWOQ_ADDRESS))
 		$(eval RECEIVER_ADDRESS := $(EWOQ_ADDRESS))
-		$(eval ENV_VAR_PREFIX := LOCAL_L2)
-		$(eval CHAIN_DISPLAY := Local L2)
+		$(eval ENV_VAR_PREFIX := LOCAL_L1_2)
+		$(eval CHAIN_DISPLAY := L1-2)
 	)
 endef
 
 # トークンのデプロイ
 .PHONY: deploy-token
 deploy-token: setup-env
-	@if [ -z "$(filter c-chain dispatch local-l1 local-l2,$(MAKECMDGOALS))" ]; then \
-		echo "Usage: make deploy-token [c-chain|dispatch|local-l1|local-l2]"; \
+	@if [ -z "$(filter c-chain dispatch l1-1 l1-2,$(MAKECMDGOALS))" ]; then \
+		echo "Usage: make deploy-token [c-chain|dispatch|l1-1|l1-2]"; \
 		exit 1; \
 	fi
-	$(eval TARGET_CHAIN := $(filter c-chain dispatch local-l1 local-l2,$(MAKECMDGOALS)))
+	$(eval TARGET_CHAIN := $(filter c-chain dispatch l1-1 l1-2,$(MAKECMDGOALS)))
 	$(call get_chain_config,$(TARGET_CHAIN))
 	@echo "Deploying TeleporterERC20 to $(CHAIN_DISPLAY)..."
 	@DEPLOY_PK=$(DEPLOY_PK) CHAIN_NAME=$(CHAIN_NAME) forge script script/DeployTeleporterERC20.s.sol:DeployTeleporterERC20Script \
@@ -128,11 +128,11 @@ deploy-token: setup-env
 # SimpleSenderのデプロイ
 .PHONY: deploy-sender
 deploy-sender: setup-env
-	@if [ -z "$(filter c-chain local-l1,$(MAKECMDGOALS))" ]; then \
-		echo "Usage: make deploy-sender [c-chain|local-l1]"; \
+	@if [ -z "$(filter c-chain l1-1,$(MAKECMDGOALS))" ]; then \
+		echo "Usage: make deploy-sender [c-chain|l1-1]"; \
 		exit 1; \
 	fi
-	$(eval TARGET_CHAIN := $(filter c-chain local-l1,$(MAKECMDGOALS)))
+	$(eval TARGET_CHAIN := $(filter c-chain l1-1,$(MAKECMDGOALS)))
 	$(call get_chain_config,$(TARGET_CHAIN))
 	@echo "Deploying SimpleSender to $(CHAIN_DISPLAY)..."
 	@CONTRACT_TYPE=sender DEPLOY_PK=$(DEPLOY_PK) CHAIN_NAME=$(CHAIN_NAME) forge script script/DeploySimpleContracts.s.sol:DeploySimpleContractsScript \
@@ -149,11 +149,11 @@ deploy-sender: setup-env
 # SimpleReceiverのデプロイ
 .PHONY: deploy-receiver
 deploy-receiver: setup-env
-	@if [ -z "$(filter dispatch local-l2,$(MAKECMDGOALS))" ]; then \
-		echo "Usage: make deploy-receiver [dispatch|local-l2]"; \
+	@if [ -z "$(filter dispatch l1-2,$(MAKECMDGOALS))" ]; then \
+		echo "Usage: make deploy-receiver [dispatch|l1-2]"; \
 		exit 1; \
 	fi
-	$(eval TARGET_CHAIN := $(filter dispatch local-l2,$(MAKECMDGOALS)))
+	$(eval TARGET_CHAIN := $(filter dispatch l1-2,$(MAKECMDGOALS)))
 	$(call get_chain_config,$(TARGET_CHAIN))
 	@echo "Deploying SimpleReceiver to $(CHAIN_DISPLAY)..."
 	@CONTRACT_TYPE=receiver DEPLOY_PK=$(DEPLOY_PK) CHAIN_NAME=$(CHAIN_NAME) forge script script/DeploySimpleContracts.s.sol:DeploySimpleContractsScript \
@@ -170,11 +170,11 @@ deploy-receiver: setup-env
 # トークンのmint
 .PHONY: mint
 mint:
-	@if [ -z "$(filter c-chain dispatch local-l1 local-l2,$(MAKECMDGOALS))" ]; then \
-		echo "Usage: make mint [c-chain|dispatch|local-l1|local-l2]"; \
+	@if [ -z "$(filter c-chain dispatch l1-1 l1-2,$(MAKECMDGOALS))" ]; then \
+		echo "Usage: make mint [c-chain|dispatch|l1-1|l1-2]"; \
 		exit 1; \
 	fi
-	$(eval TARGET_CHAIN := $(filter c-chain dispatch local-l1 local-l2,$(MAKECMDGOALS)))
+	$(eval TARGET_CHAIN := $(filter c-chain dispatch l1-1 l1-2,$(MAKECMDGOALS)))
 	$(call get_chain_config,$(TARGET_CHAIN))
 	@echo "Minting tokens on $(CHAIN_DISPLAY)..."
 	@cast send --rpc-url $(RPC_URL) --private-key "$(DEPLOY_PK)" "$(TOKEN_ADDRESS)" \
@@ -183,8 +183,8 @@ mint:
 # 残高確認
 .PHONY: balance
 balance:
-	@if [ -z "$(filter c-chain dispatch local-l1 local-l2,$(word 2,$(MAKECMDGOALS)))" ]; then \
-		echo "Usage: make balance [c-chain|dispatch|local-l1|local-l2] [address]"; \
+	@if [ -z "$(filter c-chain dispatch l1-1 l1-2,$(word 2,$(MAKECMDGOALS)))" ]; then \
+		echo "Usage: make balance [c-chain|dispatch|l1-1|l1-2] [address]"; \
 		exit 1; \
 	fi
 	$(eval TARGET_CHAIN := $(word 2,$(MAKECMDGOALS)))
@@ -209,7 +209,7 @@ balance:
 send-tokens:
 	@if [ -z "$(word 2,$(MAKECMDGOALS))" ] || [ -z "$(word 3,$(MAKECMDGOALS))" ]; then \
 		echo "Usage: make send-tokens [from-chain] [to-chain]"; \
-		echo "  Chains: c-chain, dispatch, local-l1, local-l2"; \
+		echo "  Chains: c-chain, dispatch, l1-1, l1-2"; \
 		exit 1; \
 	fi
 	$(eval FROM_CHAIN := $(word 2,$(MAKECMDGOALS)))
@@ -234,8 +234,8 @@ send-tokens:
 send-message:
 	@if [ -z "$(word 2,$(MAKECMDGOALS))" ] || [ -z "$(word 3,$(MAKECMDGOALS))" ]; then \
 		echo "Usage: make send-message [from-chain] [to-chain]"; \
-		echo "  From chains: c-chain, local-l1"; \
-		echo "  To chains: dispatch, local-l2"; \
+		echo "  From chains: c-chain, l1-1"; \
+		echo "  To chains: dispatch, l1-2"; \
 		exit 1; \
 	fi
 	$(eval FROM_CHAIN := $(word 2,$(MAKECMDGOALS)))
@@ -258,11 +258,11 @@ send-message:
 # メッセージ確認
 .PHONY: check-message
 check-message:
-	@if [ -z "$(filter dispatch local-l2,$(MAKECMDGOALS))" ]; then \
-		echo "Usage: make check-message [dispatch|local-l2]"; \
+	@if [ -z "$(filter dispatch l1-2,$(MAKECMDGOALS))" ]; then \
+		echo "Usage: make check-message [dispatch|l1-2]"; \
 		exit 1; \
 	fi
-	$(eval TARGET_CHAIN := $(filter dispatch local-l2,$(MAKECMDGOALS)))
+	$(eval TARGET_CHAIN := $(filter dispatch l1-2,$(MAKECMDGOALS)))
 	$(call get_chain_config,$(TARGET_CHAIN))
 	@echo "Checking last message on $(CHAIN_DISPLAY)..."
 	@cast call --rpc-url $(RPC_URL) "$(RECEIVER_CONTRACT)" "lastMessage()(string)"
@@ -281,10 +281,10 @@ deploy-all:
 		$(MAKE) deploy-receiver dispatch; \
 		echo "All Fuji testnet contracts deployed!"; \
 	elif [ "$(filter local,$(MAKECMDGOALS))" ]; then \
-		$(MAKE) deploy-token local-l1; \
-		$(MAKE) deploy-token local-l2; \
-		$(MAKE) deploy-sender local-l1; \
-		$(MAKE) deploy-receiver local-l2; \
+		$(MAKE) deploy-token l1-1; \
+		$(MAKE) deploy-token l1-2; \
+		$(MAKE) deploy-sender l1-1; \
+		$(MAKE) deploy-receiver l1-2; \
 		echo "All local contracts deployed!"; \
 	fi
 
@@ -323,12 +323,12 @@ help:
 	@echo "Available chains:"
 	@echo "  c-chain    - Fuji C-Chain"
 	@echo "  dispatch   - Fuji Dispatch"
-	@echo "  local-l1   - Local L1 chain"
-	@echo "  local-l2   - Local L2 chain"
+	@echo "  l1-1       - Local L1 chain 1"
+	@echo "  l1-2       - Local L1 chain 2"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make deploy-all fuji"
 	@echo "  make mint c-chain"
-	@echo "  make balance local-l1 0x1234..."
+	@echo "  make balance l1-1 0x1234..."
 	@echo "  make send-tokens c-chain dispatch"
-	@echo "  make send-message local-l1 local-l2"
+	@echo "  make send-message l1-1 l1-2"

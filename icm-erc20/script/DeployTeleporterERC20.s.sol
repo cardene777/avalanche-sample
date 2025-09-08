@@ -36,14 +36,14 @@ contract DeployTeleporterERC20Script is Script {
             tokenSymbol = "FDT";
             teleporterMessenger = TELEPORTER_MESSENGER_FUJI;
         } else if (keccak256(bytes(chainName)) == keccak256(bytes("local-l1"))) {
-            tokenName = "LocalL1Token";
-            tokenSymbol = "L1T";
+            tokenName = "L1-1 Token";
+            tokenSymbol = "L11T";
             // ローカル環境では実際のTeleporter Messengerアドレスを使用
             // Avalancheローカルノードのデフォルト値
             teleporterMessenger = 0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf;
         } else if (keccak256(bytes(chainName)) == keccak256(bytes("local-l2"))) {
-            tokenName = "LocalL2Token";
-            tokenSymbol = "L2T";
+            tokenName = "L1-2 Token";
+            tokenSymbol = "L12T";
             // ローカル環境では実際のTeleporter Messengerアドレスを使用
             // Avalancheローカルノードのデフォルト値
             teleporterMessenger = 0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf;

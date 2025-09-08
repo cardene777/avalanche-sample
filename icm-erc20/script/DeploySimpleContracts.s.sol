@@ -30,9 +30,11 @@ contract DeploySimpleContractsScript is Script {
         // 環境変数CHAIN_NAMEがあればそれを使用、なければRPC URLから判断
         try vm.envString("CHAIN_NAME") returns (string memory chainName) {
             if (keccak256(bytes(chainName)) == keccak256(bytes("local-l1"))) {
-                teleporterMessenger = vm.envAddress("TELEPORTER_REGISTRY_LOCAL_L1");
+                // ローカル環境では実際のTeleporter Messengerアドレスを使用
+                teleporterMessenger = 0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf;
             } else if (keccak256(bytes(chainName)) == keccak256(bytes("local-l2"))) {
-                teleporterMessenger = vm.envAddress("TELEPORTER_REGISTRY_LOCAL_L2");
+                // ローカル環境では実際のTeleporter Messengerアドレスを使用
+                teleporterMessenger = 0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf;
             } else {
                 teleporterMessenger = TELEPORTER_MESSENGER_FUJI;
             }
