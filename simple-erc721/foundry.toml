@@ -1,0 +1,16 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+remappings = [
+    "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/"
+]
+
+# RPC設定
+[rpc_endpoints]
+# Avalanche L1 (Local)
+avalanche_l1 = "${AVALANCHE_L1_RPC_URL}"
+# Avalanche Fuji Testnet
+avalanche_fuji = "${AVALANCHE_FUJI_RPC_URL}"
+
+# See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

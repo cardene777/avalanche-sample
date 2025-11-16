@@ -1,6 +1,16 @@
-[submodule "icm-erc20/contract/lib/openzeppelin-contracts"]
-	path = icm-erc20/contract/lib/openzeppelin-contracts
+
+[submodule "icm-erc20/lib/forge-std"]
+	path = icm-erc20/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
+[submodule "icm-erc20/lib/openzeppelin-contracts"]
+	path = icm-erc20/lib/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
-[submodule "icm-erc20/contract/lib/icm-contracts"]
-	path = icm-erc20/contract/lib/icm-contracts
-	url = https://github.com/ava-labs/icm-contracts
+[submodule "icm-erc20/lib/teleporter"]
+	path = icm-erc20/lib/teleporter
+	url = https://github.com/ava-labs/teleporter
+[submodule "simple-erc721/lib/forge-std"]
+	path = simple-erc721/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
+[submodule "simple-erc721/lib/openzeppelin-contracts"]
+	path = simple-erc721/lib/openzeppelin-contracts
+	url = https://github.com/openzeppelin/openzeppelin-contracts
