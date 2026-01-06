@@ -1,0 +1,386 @@
+openapi: 3.0.3
+info:
+  title: x402 Paywall Debug API
+  description: |
+    Debug and health check endpoints for troubleshooting cross-chain payment and access state.
+    These endpoints provide visibility into payment status on Dispatch chain and access status
+    on Echo chain, as well as overall system health.
+  version: 1.0.0
+  contact:
+    name: x402 Paywall Project
+servers:
+  - url: http://localhost:4000
+    description: Local development
+  - url: https://api.example.com
+    description: Production
+
+paths:
+  /api/debug/payment-status:
+    get:
+      summary: Get payment and access status across both chains
+      description: |
+        Queries both Dispatch chain (PaymentRegistry) and Echo chain (ContentAccessManager)
+        to provide complete visibility into payment and access state for a buyer/content pair.
+        Useful for troubleshooting ICM message relay issues.
+      operationId: getPaymentStatus
+      tags:
+        - Debug
+      parameters:
+        - name: buyer
+          in: query
+          required: true
+          description: Buyer's wallet address
+          schema:
+            type: string
+            pattern: "^0x[a-fA-F0-9]{40}$"
+            example: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+        - name: contentId
+          in: query
+          required: true
+          description: Content identifier (human-readable string, will be hashed to bytes32)
+          schema:
+            type: string
+            example: article-123
+      responses:
+        '200':
+          description: Payment status retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentStatusResponse'
+              examples:
+                paidAndGranted:
+                  value:
+                    buyer: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+                    contentId: article-123
+                    contentIdHash: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+                    dispatchChain:
+                      paid: true
+                      amount: "500000"
+                      paymentTxHash: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+                      timestamp: 1700000000
+                      settled: true
+                    echoChain:
+                      accessGranted: true
+                      grantedAt: 1700000030
+                    syncStatus:
+                      inSync: true
+                      latency: 30
+                paidNotGranted:
+                  value:
+                    buyer: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+                    contentId: article-123
+                    contentIdHash: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+                    dispatchChain:
+                      paid: true
+                      amount: "500000"
+                      paymentTxHash: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+                      timestamp: 1700000000
+                      settled: true
+                    echoChain:
+                      accessGranted: false
+                      grantedAt: null
+                    syncStatus:
+                      inSync: false
+                      latency: null
+                      warning: "Payment settled on Dispatch but access not granted on Echo. Check ICM relayer."
+        '400':
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: Invalid buyer address
+                details: Address must be a valid Ethereum address
+        '500':
+          description: RPC connection error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: Failed to query Dispatch chain
+                details: RPC connection timeout
+
+  /api/debug/health:
+    get:
+      summary: System health check
+      description: |
+        Checks connectivity and status of all system components:
+        - Backend API
+        - Facilitator service
+        - Dispatch chain RPC
+        - Echo chain RPC
+        - ICM Relayer (if monitoring enabled)
+      operationId: getHealth
+      tags:
+        - Debug
+      responses:
+        '200':
+          description: Health check completed (may have degraded components)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              examples:
+                allHealthy:
+                  value:
+                    status: healthy
+                    timestamp: 1700000000
+                    components:
+                      backend:
+                        status: healthy
+                        latency: 5
+                      facilitator:
+                        status: healthy
+                        url: http://facilitator:5000
+                        latency: 10
+                      dispatchRpc:
+                        status: healthy
+                        url: https://subnets.avax.network/dispatch/testnet/rpc
+                        latency: 150
+                        blockNumber: 1234567
+                      echoRpc:
+                        status: healthy
+                        url: https://subnets.avax.network/echo/testnet/rpc
+                        latency: 140
+                        blockNumber: 2345678
+                      icmRelayer:
+                        status: healthy
+                        lastProcessedBlock: 1234560
+                degraded:
+                  value:
+                    status: degraded
+                    timestamp: 1700000000
+                    components:
+                      backend:
+                        status: healthy
+                        latency: 5
+                      facilitator:
+                        status: healthy
+                        url: http://facilitator:5000
+                        latency: 10
+                      dispatchRpc:
+                        status: healthy
+                        url: https://subnets.avax.network/dispatch/testnet/rpc
+                        latency: 150
+                        blockNumber: 1234567
+                      echoRpc:
+                        status: unhealthy
+                        url: https://subnets.avax.network/echo/testnet/rpc
+                        error: Connection timeout
+                      icmRelayer:
+                        status: unknown
+                        error: Relayer monitoring not configured
+
+components:
+  schemas:
+    PaymentStatusResponse:
+      type: object
+      required:
+        - buyer
+        - contentId
+        - contentIdHash
+        - dispatchChain
+        - echoChain
+        - syncStatus
+      properties:
+        buyer:
+          type: string
+          pattern: "^0x[a-fA-F0-9]{40}$"
+          description: Buyer's wallet address
+          example: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+        contentId:
+          type: string
+          description: Human-readable content ID
+          example: article-123
+        contentIdHash:
+          type: string
+          pattern: "^0x[a-fA-F0-9]{64}$"
+          description: Keccak256 hash of contentId (used on-chain)
+          example: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+        dispatchChain:
+          $ref: '#/components/schemas/DispatchChainStatus'
+        echoChain:
+          $ref: '#/components/schemas/EchoChainStatus'
+        syncStatus:
+          $ref: '#/components/schemas/SyncStatus'
+
+    DispatchChainStatus:
+      type: object
+      required:
+        - paid
+      properties:
+        paid:
+          type: boolean
+          description: Whether payment has been recorded in PaymentRegistry
+          example: true
+        amount:
+          type: string
+          description: Payment amount in token base units (if paid)
+          example: "500000"
+        paymentTxHash:
+          type: string
+          pattern: "^0x[a-fA-F0-9]{64}$"
+          description: Transaction hash of payment (if paid)
+          example: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+        timestamp:
+          type: integer
+          description: Payment timestamp (if paid)
+          example: 1700000000
+        settled:
+          type: boolean
+          description: Whether payment has been settled and ICM message sent
+          example: true
+
+    EchoChainStatus:
+      type: object
+      required:
+        - accessGranted
+      properties:
+        accessGranted:
+          type: boolean
+          description: Whether access has been granted in ContentAccessManager
+          example: true
+        grantedAt:
+          type: integer
+          nullable: true
+          description: Timestamp when access was granted (if granted)
+          example: 1700000030
+
+    SyncStatus:
+      type: object
+      required:
+        - inSync
+      properties:
+        inSync:
+          type: boolean
+          description: Whether Dispatch and Echo chains are in sync for this payment
+          example: true
+        latency:
+          type: integer
+          nullable: true
+          description: Seconds between payment (Dispatch) and access grant (Echo)
+          example: 30
+        warning:
+          type: string
+          description: Warning message if out of sync
+          example: "Payment settled on Dispatch but access not granted on Echo. Check ICM relayer."
+
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - timestamp
+        - components
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+          description: Overall system health status
+          example: healthy
+        timestamp:
+          type: integer
+          description: Unix timestamp of health check
+          example: 1700000000
+        components:
+          type: object
+          required:
+            - backend
+            - facilitator
+            - dispatchRpc
+            - echoRpc
+          properties:
+            backend:
+              $ref: '#/components/schemas/ComponentHealth'
+            facilitator:
+              $ref: '#/components/schemas/ComponentHealth'
+            dispatchRpc:
+              $ref: '#/components/schemas/RpcHealth'
+            echoRpc:
+              $ref: '#/components/schemas/RpcHealth'
+            icmRelayer:
+              $ref: '#/components/schemas/RelayerHealth'
+
+    ComponentHealth:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy, unknown]
+          example: healthy
+        url:
+          type: string
+          format: uri
+          description: Component URL (if applicable)
+          example: http://facilitator:5000
+        latency:
+          type: integer
+          description: Response latency in milliseconds
+          example: 10
+        error:
+          type: string
+          description: Error message (if unhealthy)
+          example: Connection refused
+
+    RpcHealth:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy, unknown]
+          example: healthy
+        url:
+          type: string
+          format: uri
+          description: RPC endpoint URL
+          example: https://subnets.avax.network/dispatch/testnet/rpc
+        latency:
+          type: integer
+          description: RPC call latency in milliseconds
+          example: 150
+        blockNumber:
+          type: integer
+          description: Latest block number (if healthy)
+          example: 1234567
+        error:
+          type: string
+          description: Error message (if unhealthy)
+          example: Connection timeout
+
+    RelayerHealth:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy, unknown]
+          example: healthy
+        lastProcessedBlock:
+          type: integer
+          description: Last block number processed by relayer (if monitoring enabled)
+          example: 1234560
+        error:
+          type: string
+          description: Error message or reason for unknown status
+          example: Relayer monitoring not configured
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Error message
+          example: Invalid buyer address
+        details:
+          type: string
+          description: Additional error details
+          example: Address must be a valid Ethereum address

@@ -1,0 +1,329 @@
+openapi: 3.0.3
+info:
+  title: x402 Facilitator API
+  description: |
+    Facilitator service for processing ERC-3009 gasless payments and generating payment proofs.
+    Handles signature validation, transaction execution on Dispatch chain, and proof issuance.
+  version: 1.0.0
+  contact:
+    name: x402 Paywall Project
+servers:
+  - url: http://localhost:5000
+    description: Local development
+  - url: https://facilitator.example.com
+    description: Production
+
+paths:
+  /x402/process:
+    post:
+      summary: Process ERC-3009 payment authorization
+      description: |
+        Accepts ERC-3009 authorization signature from user, validates it, executes the payment
+        on Dispatch chain (calling `transferWithAuthorization`), records payment in PaymentRegistry,
+        and returns a signed payment proof JWT for use in X-PAYMENT header.
+      operationId: processPayment
+      tags:
+        - Payment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentAuthorizationRequest'
+            example:
+              paymentRequirements:
+                network: avalanche-dispatch-testnet
+                tokenAddress: "0x1234567890abcdef1234567890abcdef12345678"
+                amount: "0.5"
+                recipient: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+                reference: "content:article-123"
+              authorization:
+                from: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+                to: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+                value: "500000"
+                validAfter: 0
+                validBefore: 1700000000
+                nonce: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+                v: 28
+                r: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+                s: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+      responses:
+        '200':
+          description: Payment processed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentProofResponse'
+              example:
+                success: true
+                paymentProof: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJidXllciI6IjB4NzQyZDM1Q2M2NjM0QzA1MzI5MjVhM2I4NDRCYzllNzU5NWYwYkViIiwiY29udGVudElkIjoiYXJ0aWNsZS0xMjMiLCJhbW91bnQiOiIwLjUiLCJ0eEhhc2giOiIweGFiY2RlZi4uLiIsInRpbWVzdGFtcCI6MTcwMDAwMDAwMH0.signature
+                transactionHash: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+                buyer: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+                contentId: article-123
+                amount: "0.5"
+                timestamp: 1700000000
+        '400':
+          description: Invalid request (validation failed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidSignature:
+                  value:
+                    error: Invalid signature
+                    details: Signature does not match authorization parameters
+                expiredAuth:
+                  value:
+                    error: Authorization expired
+                    details: validBefore timestamp has passed
+                nonceUsed:
+                  value:
+                    error: Nonce already used
+                    details: This authorization has already been executed
+        '500':
+          description: Internal server error (blockchain RPC failure, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: Transaction execution failed
+                details: Insufficient balance or gas estimation failed
+
+  /x402/introspect:
+    post:
+      summary: Verify payment proof
+      description: |
+        Validates a payment proof JWT issued by this facilitator. Used by Resource Server
+        to verify X-PAYMENT header before granting content access.
+      operationId: introspectPayment
+      tags:
+        - Payment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IntrospectRequest'
+            example:
+              paymentProof: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+      responses:
+        '200':
+          description: Payment proof is valid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntrospectResponse'
+              example:
+                valid: true
+                buyer: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+                contentId: article-123
+                amount: "0.5"
+                transactionHash: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+                timestamp: 1700000000
+        '400':
+          description: Invalid or expired payment proof
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntrospectResponse'
+              example:
+                valid: false
+                error: Invalid JWT signature
+
+components:
+  schemas:
+    PaymentAuthorizationRequest:
+      type: object
+      required:
+        - paymentRequirements
+        - authorization
+      properties:
+        paymentRequirements:
+          $ref: '#/components/schemas/PaymentRequirement'
+        authorization:
+          $ref: '#/components/schemas/ERC3009Authorization'
+
+    PaymentRequirement:
+      type: object
+      required:
+        - network
+        - tokenAddress
+        - amount
+        - recipient
+        - reference
+      properties:
+        network:
+          type: string
+          example: avalanche-dispatch-testnet
+        tokenAddress:
+          type: string
+          pattern: "^0x[a-fA-F0-9]{40}$"
+          example: "0x1234567890abcdef1234567890abcdef12345678"
+        amount:
+          type: string
+          description: Amount in token units (decimal string, e.g., "0.5" USDC)
+          example: "0.5"
+        recipient:
+          type: string
+          pattern: "^0x[a-fA-F0-9]{40}$"
+          example: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+        reference:
+          type: string
+          description: Payment reference (format: "content:contentId")
+          example: "content:article-123"
+
+    ERC3009Authorization:
+      type: object
+      description: ERC-3009 TransferWithAuthorization signature components
+      required:
+        - from
+        - to
+        - value
+        - validAfter
+        - validBefore
+        - nonce
+        - v
+        - r
+        - s
+      properties:
+        from:
+          type: string
+          pattern: "^0x[a-fA-F0-9]{40}$"
+          description: Buyer's wallet address
+          example: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+        to:
+          type: string
+          pattern: "^0x[a-fA-F0-9]{40}$"
+          description: Recipient address (must match paymentRequirements.recipient)
+          example: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+        value:
+          type: string
+          description: Transfer amount in token base units (e.g., "500000" for 0.5 USDC with 6 decimals)
+          example: "500000"
+        validAfter:
+          type: integer
+          description: Unix timestamp after which authorization is valid
+          example: 0
+        validBefore:
+          type: integer
+          description: Unix timestamp before which authorization is valid
+          example: 1700000000
+        nonce:
+          type: string
+          pattern: "^0x[a-fA-F0-9]{64}$"
+          description: Unique nonce (bytes32, prevents replay)
+          example: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+        v:
+          type: integer
+          description: ECDSA signature v component
+          example: 28
+        r:
+          type: string
+          pattern: "^0x[a-fA-F0-9]{64}$"
+          description: ECDSA signature r component
+          example: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+        s:
+          type: string
+          pattern: "^0x[a-fA-F0-9]{64}$"
+          description: ECDSA signature s component
+          example: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+
+    PaymentProofResponse:
+      type: object
+      required:
+        - success
+        - paymentProof
+        - transactionHash
+        - buyer
+        - contentId
+        - amount
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          example: true
+        paymentProof:
+          type: string
+          description: JWT containing payment details, signed by facilitator
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        transactionHash:
+          type: string
+          pattern: "^0x[a-fA-F0-9]{64}$"
+          description: Dispatch chain transaction hash of payment
+          example: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+        buyer:
+          type: string
+          pattern: "^0x[a-fA-F0-9]{40}$"
+          example: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+        contentId:
+          type: string
+          example: article-123
+        amount:
+          type: string
+          example: "0.5"
+        timestamp:
+          type: integer
+          description: Unix timestamp of payment
+          example: 1700000000
+
+    IntrospectRequest:
+      type: object
+      required:
+        - paymentProof
+      properties:
+        paymentProof:
+          type: string
+          description: JWT payment proof to validate
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+    IntrospectResponse:
+      type: object
+      required:
+        - valid
+      properties:
+        valid:
+          type: boolean
+          description: Whether the payment proof is valid
+          example: true
+        buyer:
+          type: string
+          pattern: "^0x[a-fA-F0-9]{40}$"
+          description: Buyer address (if valid)
+          example: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+        contentId:
+          type: string
+          description: Content ID (if valid)
+          example: article-123
+        amount:
+          type: string
+          description: Payment amount (if valid)
+          example: "0.5"
+        transactionHash:
+          type: string
+          pattern: "^0x[a-fA-F0-9]{64}$"
+          description: Transaction hash (if valid)
+          example: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+        timestamp:
+          type: integer
+          description: Payment timestamp (if valid)
+          example: 1700000000
+        error:
+          type: string
+          description: Error message (if invalid)
+          example: Invalid JWT signature
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Error message
+          example: Invalid signature
+        details:
+          type: string
+          description: Additional error details
+          example: Signature does not match authorization parameters

@@ -1,0 +1,235 @@
+openapi: 3.0.3
+info:
+  title: x402 Paywall Content API
+  description: Resource Server API for paywalled content access using x402 protocol
+  version: 1.0.0
+  contact:
+    name: x402 Paywall Project
+servers:
+  - url: http://localhost:4000
+    description: Local development
+  - url: https://api.example.com
+    description: Production
+
+paths:
+  /api/content/{contentId}:
+    get:
+      summary: Get paywalled content
+      description: |
+        Retrieves content by ID. Returns HTTP 402 with payment requirements if user has not paid.
+        Returns HTTP 200 with content if user has paid (access granted on Echo chain).
+
+        **x402 Protocol Flow:**
+        1. First request (unpaid): Returns 402 + paymentRequirements
+        2. User pays via facilitator, receives payment proof
+        3. Second request with X-PAYMENT header: Returns 200 + content
+      operationId: getContent
+      tags:
+        - Content
+      parameters:
+        - name: contentId
+          in: path
+          required: true
+          description: Unique content identifier (e.g., "article-123")
+          schema:
+            type: string
+            example: article-123
+        - name: X-Wallet-Address
+          in: header
+          required: false
+          description: Buyer's wallet address (alternative to Authorization)
+          schema:
+            type: string
+            pattern: "^0x[a-fA-F0-9]{40}$"
+            example: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+        - name: X-PAYMENT
+          in: header
+          required: false
+          description: Payment proof JWT from facilitator (for paid requests)
+          schema:
+            type: string
+            example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        - name: Authorization
+          in: header
+          required: false
+          description: Bearer token for user authentication (alternative to X-Wallet-Address)
+          schema:
+            type: string
+            example: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+      responses:
+        '200':
+          description: Content successfully retrieved (user has paid)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContentResponse'
+              example:
+                id: article-123
+                title: Advanced Avalanche ICM Patterns
+                description: Deep dive into cross-chain messaging
+                contentType: article
+                contentData:
+                  format: markdown
+                  body: "# Advanced Patterns\n\nThis article explores..."
+        '402':
+          description: Payment Required (user has not paid)
+          headers:
+            Content-Type:
+              schema:
+                type: string
+                example: application/json
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRequirementsResponse'
+              example:
+                x402Version: 1
+                paymentRequirements:
+                  - network: avalanche-dispatch-testnet
+                    tokenAddress: "0x1234567890abcdef1234567890abcdef12345678"
+                    amount: "0.5"
+                    recipient: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+                    reference: "content:article-123"
+                facilitator: https://facilitator.example.com/x402
+        '404':
+          description: Content not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: Content not found
+                contentId: invalid-id
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: Failed to query Echo chain
+                details: RPC connection timeout
+
+components:
+  schemas:
+    ContentResponse:
+      type: object
+      required:
+        - id
+        - title
+        - contentType
+        - contentData
+      properties:
+        id:
+          type: string
+          description: Unique content identifier
+          example: article-123
+        title:
+          type: string
+          description: Content display title
+          example: Advanced Avalanche ICM Patterns
+        description:
+          type: string
+          description: Short summary of content
+          example: Deep dive into cross-chain messaging patterns
+        contentType:
+          type: string
+          description: Content type or category
+          enum: [article, video, data, image]
+          example: article
+        contentData:
+          type: object
+          description: Actual content payload (structure varies by contentType)
+          additionalProperties: true
+          example:
+            format: markdown
+            body: "# Advanced Patterns\n\n..."
+
+    PaymentRequirementsResponse:
+      type: object
+      required:
+        - x402Version
+        - paymentRequirements
+        - facilitator
+      properties:
+        x402Version:
+          type: integer
+          description: x402 protocol version
+          example: 1
+        paymentRequirements:
+          type: array
+          description: List of payment options (usually one)
+          items:
+            $ref: '#/components/schemas/PaymentRequirement'
+        facilitator:
+          type: string
+          format: uri
+          description: URL of facilitator service to process payment
+          example: https://facilitator.example.com/x402
+
+    PaymentRequirement:
+      type: object
+      required:
+        - network
+        - tokenAddress
+        - amount
+        - recipient
+        - reference
+      properties:
+        network:
+          type: string
+          description: Blockchain network identifier
+          example: avalanche-dispatch-testnet
+        tokenAddress:
+          type: string
+          pattern: "^0x[a-fA-F0-9]{40}$"
+          description: ERC-3009 payment token contract address on Dispatch
+          example: "0x1234567890abcdef1234567890abcdef12345678"
+        amount:
+          type: string
+          description: Payment amount in token units (decimal string)
+          example: "0.5"
+        recipient:
+          type: string
+          pattern: "^0x[a-fA-F0-9]{40}$"
+          description: Payment recipient address (merchant)
+          example: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+        reference:
+          type: string
+          description: Payment reference (content:contentId format)
+          example: "content:article-123"
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Error message
+          example: Content not found
+        details:
+          type: string
+          description: Additional error details
+          example: RPC connection timeout
+        contentId:
+          type: string
+          description: Content ID that caused error (if applicable)
+          example: invalid-id
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Optional JWT token for user authentication
+    WalletAddress:
+      type: apiKey
+      in: header
+      name: X-Wallet-Address
+      description: Buyer's wallet address for access check
+
+security:
+  - BearerAuth: []
+  - WalletAddress: []
+  - {} # Allow unauthenticated requests (will return 402 if unpaid)

@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_BACKEND_URL=http://backend:4000
+      - NEXT_PUBLIC_FACILITATOR_URL=http://facilitator:5000
+    depends_on:
+      - backend
+      - facilitator
+    networks:
+      - x402-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "4000:4000"
+    env_file:
+      - ../.env
+    environment:
+      - ECHO_RPC_URL=${ECHO_RPC_URL}
+      - CONTENT_ACCESS_MANAGER_ADDRESS=${CONTENT_ACCESS_MANAGER_ADDRESS}
+    volumes:
+      - ./backend/content:/app/content
+    networks:
+      - x402-network
+
+  facilitator:
+    build:
+      context: ./facilitator
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    env_file:
+      - ../.env
+    environment:
+      - DISPATCH_RPC_URL=${DISPATCH_RPC_URL}
+      - ERC3009_TOKEN_ADDRESS=${ERC3009_TOKEN_ADDRESS}
+      - PAYMENT_REGISTRY_ADDRESS=${PAYMENT_REGISTRY_ADDRESS}
+      - FACILITATOR_PRIVATE_KEY=${FACILITATOR_PRIVATE_KEY}
+    networks:
+      - x402-network
+
+  icm-relayer:
+    build:
+      context: ./relayer
+      dockerfile: Dockerfile
+    env_file:
+      - ../.env
+    environment:
+      - DISPATCH_RPC_URL=${DISPATCH_RPC_URL}
+      - ECHO_RPC_URL=${ECHO_RPC_URL}
+      - DISPATCH_TELEPORTER_ADDRESS=${DISPATCH_TELEPORTER_ADDRESS}
+      - ECHO_TELEPORTER_ADDRESS=${ECHO_TELEPORTER_ADDRESS}
+    networks:
+      - x402-network
+
+networks:
+  x402-network:
+    driver: bridge
