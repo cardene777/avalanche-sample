@@ -14,3 +14,12 @@
 [submodule "simple-erc721/lib/openzeppelin-contracts"]
 	path = simple-erc721/lib/openzeppelin-contracts
 	url = https://github.com/openzeppelin/openzeppelin-contracts
+[submodule "ictt-erc20/contract/lib/openzeppelin-contracts"]
+	path = ictt-erc20/contract/lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "ictt-erc20/contract/lib/openzeppelin-contracts-upgradeable"]
+	path = ictt-erc20/contract/lib/openzeppelin-contracts-upgradeable
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts-upgradeable
+[submodule "ictt-erc20/contract/lib/icm-contracts"]
+	path = ictt-erc20/contract/lib/icm-contracts
+	url = https://github.com/ava-labs/icm-contracts
