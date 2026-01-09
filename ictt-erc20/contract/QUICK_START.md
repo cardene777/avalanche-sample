@@ -74,12 +74,9 @@ make deploy-and-send
 [1/8] Fuji側デプロイ
 =====================================================
 
-→ Blockchain IDを取得中...
-✓ Fuji Blockchain ID: 0x7fc93d85...
 → SampleERC20 と TokenHome をデプロイ中...
 ✓ SampleERC20: 0x961ca8E8...
 ✓ TokenHome: 0x42D5F416...
-→ 追加: TOKEN_HOME_BLOCKCHAIN_ID
 → 追加: TOKEN_ADDRESS
 → 追加: TOKEN_HOME_ADDRESS
 
@@ -103,16 +100,14 @@ make deploy-and-send
 
 ## カスタマイズ
 
-### ミント量を変更
+`.env`ファイルで以下の値を設定することでカスタマイズできます:
 
 ```bash
-MINT_AMOUNT=500000000000000000000 make deploy-and-send  # 500トークン
-```
+# ミント量を変更（デフォルト: 100トークン）
+MINT_AMOUNT=500000000000000000000
 
-### 送信量を変更
-
-```bash
-SEND_AMOUNT=10000000000000000000 make deploy-and-send  # 10トークン
+# 送信量を変更（デフォルト: 1トークン）
+SEND_AMOUNT=10000000000000000000
 ```
 
 ---
@@ -127,10 +122,10 @@ make balance-fuji
 make balance-dispatch
 
 # 追加でトークンをミント
-make mint MINT_AMOUNT=100000000000000000000
+make mint
 
 # 追加でトークンを送信
-make send AMOUNT=1000000000000000000
+make send
 ```
 
 ---
@@ -155,6 +150,6 @@ make send AMOUNT=1000000000000000000
 
 ## 関連ドキュメント
 
-- [DEPLOY_GUIDE.md](./DEPLOY_GUIDE.md) - 詳細なデプロイガイド（従来の手動方法）
+- [MANUAL_COMMANDS.md](./MANUAL_COMMANDS.md) - 手動実行コマンド一覧
 - [TEST.md](./TEST.md) - テストガイド
 - [Avalanche ICM Documentation](https://docs.avax.network/cross-chain/teleporter/overview)
