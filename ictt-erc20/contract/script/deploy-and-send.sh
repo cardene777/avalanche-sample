@@ -119,21 +119,14 @@ DEPLOYER=$(cast wallet address --private-key $PRIVATE_KEY)
 print_success "デプロイヤー: $DEPLOYER"
 
 # =============================================================================
-# Step 1: Fuji側デプロイ
+# Step 1: Fuji側デプロイ（forge script）
 # =============================================================================
 
 print_header "[1/8] Fuji側デプロイ"
 
-# Blockchain IDを取得
-print_info "Blockchain IDを取得中..."
-FUJI_BLOCKCHAIN_ID=$(cast call 0x0200000000000000000000000000000000000005 "getBlockchainID()(bytes32)" --rpc-url fuji 2>/dev/null)
-print_success "Fuji Blockchain ID: $FUJI_BLOCKCHAIN_ID"
-
-# デプロイ実行
 print_info "SampleERC20 と TokenHome をデプロイ中..."
-DEPLOY_OUTPUT=$(FUJI_BLOCKCHAIN_ID=$FUJI_BLOCKCHAIN_ID forge script script/DeployAll.s.sol:DeployFujiHome \
+DEPLOY_OUTPUT=$(forge script script/Deploy.s.sol:DeployFujiHome \
     --rpc-url fuji \
-    --private-key $PRIVATE_KEY \
     --broadcast 2>&1)
 
 # アドレスを抽出
@@ -150,12 +143,11 @@ print_success "SampleERC20: $TOKEN_ADDRESS"
 print_success "TokenHome: $TOKEN_HOME_ADDRESS"
 
 # .envに保存
-update_env "TOKEN_HOME_BLOCKCHAIN_ID" "$FUJI_BLOCKCHAIN_ID"
 update_env "TOKEN_ADDRESS" "$TOKEN_ADDRESS"
 update_env "TOKEN_HOME_ADDRESS" "$TOKEN_HOME_ADDRESS"
 
 # =============================================================================
-# Step 2: Fuji側初期化
+# Step 2: Fuji側初期化（cast send）
 # =============================================================================
 
 print_header "[2/8] Fuji側TokenHome初期化"
@@ -163,48 +155,31 @@ print_header "[2/8] Fuji側TokenHome初期化"
 # .envを再読み込み
 source "$ENV_FILE"
 
-TELEPORTER_REGISTRY=${FUJI_TELEPORTER_REGISTRY_ADDRESS:-0xF86Cb19Ad8405AEFa7d09C778215D2Cb6eBfB228}
-TOKEN_DECIMALS=${TOKEN_DECIMALS:-18}
-
 print_info "TokenHome を初期化中..."
-TX_OUTPUT=$(cast send $TOKEN_HOME_ADDRESS \
+cast send $TOKEN_HOME_ADDRESS \
     "initialize(address,address,uint256,address,uint8)" \
-    $TELEPORTER_REGISTRY \
+    0xF86Cb19Ad8405AEFa7d09C778215D2Cb6eBfB228 \
     $DEPLOYER \
     1 \
     $TOKEN_ADDRESS \
-    $TOKEN_DECIMALS \
+    18 \
     --rpc-url fuji \
-    --private-key $PRIVATE_KEY 2>&1)
-
-TX_HASH=$(echo "$TX_OUTPUT" | grep "transactionHash" | awk '{print $2}')
-if [ -n "$TX_HASH" ]; then
-    print_success "Tx: https://testnet.snowtrace.io/tx/$TX_HASH"
-fi
+    --private-key $PRIVATE_KEY
 
 print_success "TokenHome 初期化完了"
 
 # =============================================================================
-# Step 3: Dispatch側デプロイ
+# Step 3: Dispatch側デプロイ（forge script）
 # =============================================================================
 
 print_header "[3/8] Dispatch側デプロイ"
 
-# .envを再読み込みしてexport
+# .envを再読み込み
 source "$ENV_FILE"
-export TOKEN_HOME_BLOCKCHAIN_ID
-export TOKEN_HOME_ADDRESS
 
-# Blockchain IDを取得
-print_info "Dispatch Blockchain IDを取得中..."
-DISPATCH_BLOCKCHAIN_ID=$(cast call 0x0200000000000000000000000000000000000005 "getBlockchainID()(bytes32)" --rpc-url dispatch 2>/dev/null)
-print_success "Dispatch Blockchain ID: $DISPATCH_BLOCKCHAIN_ID"
-
-# デプロイ実行
 print_info "TokenRemote をデプロイ中..."
-DEPLOY_OUTPUT=$(DISPATCH_BLOCKCHAIN_ID=$DISPATCH_BLOCKCHAIN_ID forge script script/DeployAll.s.sol:DeployDispatchRemote \
+DEPLOY_OUTPUT=$(forge script script/Deploy.s.sol:DeployDispatchRemote \
     --rpc-url dispatch \
-    --private-key $PRIVATE_KEY \
     --broadcast 2>&1)
 
 # アドレスを抽出
@@ -219,11 +194,10 @@ fi
 print_success "TokenRemote: $REMOTE_TOKEN_TRANSFERRER_ADDRESS"
 
 # .envに保存
-update_env "DISPATCH_BLOCKCHAIN_ID" "$DISPATCH_BLOCKCHAIN_ID"
 update_env "REMOTE_TOKEN_TRANSFERRER_ADDRESS" "$REMOTE_TOKEN_TRANSFERRER_ADDRESS"
 
 # =============================================================================
-# Step 4: Dispatch側初期化
+# Step 4: Dispatch側初期化（cast send）
 # =============================================================================
 
 print_header "[4/8] Dispatch側TokenRemote初期化"
@@ -231,46 +205,30 @@ print_header "[4/8] Dispatch側TokenRemote初期化"
 # .envを再読み込み
 source "$ENV_FILE"
 
-DISPATCH_TELEPORTER_REGISTRY=${DISPATCH_TELEPORTER_REGISTRY_ADDRESS:-0xF86Cb19Ad8405AEFa7d09C778215D2Cb6eBfB228}
-TOKEN_HOME_DECIMALS=${TOKEN_HOME_DECIMALS:-18}
-REMOTE_TOKEN_NAME=${REMOTE_TOKEN_NAME:-"Bridged Token"}
-REMOTE_TOKEN_SYMBOL=${REMOTE_TOKEN_SYMBOL:-"bSMPL"}
-REMOTE_TOKEN_DECIMALS=${REMOTE_TOKEN_DECIMALS:-18}
-
 print_info "TokenRemote を初期化中..."
-TX_OUTPUT=$(cast send $REMOTE_TOKEN_TRANSFERRER_ADDRESS \
+cast send $REMOTE_TOKEN_TRANSFERRER_ADDRESS \
     "initialize((address,address,uint256,bytes32,address,uint8),string,string,uint8)" \
-    "($DISPATCH_TELEPORTER_REGISTRY,$DEPLOYER,1,$TOKEN_HOME_BLOCKCHAIN_ID,$TOKEN_HOME_ADDRESS,$TOKEN_HOME_DECIMALS)" \
-    "$REMOTE_TOKEN_NAME" \
-    "$REMOTE_TOKEN_SYMBOL" \
-    $REMOTE_TOKEN_DECIMALS \
+    "(0xF86Cb19Ad8405AEFa7d09C778215D2Cb6eBfB228,$DEPLOYER,1,$TOKEN_HOME_BLOCKCHAIN_ID,$TOKEN_HOME_ADDRESS,18)" \
+    "Bridged Token" \
+    "bSMPL" \
+    18 \
     --rpc-url dispatch \
-    --private-key $PRIVATE_KEY 2>&1)
-
-TX_HASH=$(echo "$TX_OUTPUT" | grep "transactionHash" | awk '{print $2}')
-if [ -n "$TX_HASH" ]; then
-    print_success "Tx: https://testnet.snowtrace.io/tx/$TX_HASH"
-fi
+    --private-key $PRIVATE_KEY
 
 print_success "TokenRemote 初期化完了"
 
 # =============================================================================
-# Step 5: リモート登録
+# Step 5: リモート登録（cast send）
 # =============================================================================
 
 print_header "[5/8] リモートチェーン登録"
 
 print_info "registerWithHome を実行中..."
-TX_OUTPUT=$(cast send $REMOTE_TOKEN_TRANSFERRER_ADDRESS \
+cast send $REMOTE_TOKEN_TRANSFERRER_ADDRESS \
     "registerWithHome((address,uint256))" \
     "(0x0000000000000000000000000000000000000000,0)" \
     --rpc-url dispatch \
-    --private-key $PRIVATE_KEY 2>&1)
-
-TX_HASH=$(echo "$TX_OUTPUT" | grep "transactionHash" | awk '{print $2}')
-if [ -n "$TX_HASH" ]; then
-    print_success "Tx: https://testnet.snowtrace.io/tx/$TX_HASH"
-fi
+    --private-key $PRIVATE_KEY
 
 print_success "リモート登録リクエスト送信完了"
 print_warning "クロスチェーン登録完了まで10秒〜数分かかります"
@@ -280,66 +238,52 @@ print_info "15秒待機中..."
 sleep 15
 
 # =============================================================================
-# Step 6: トークンミント
+# Step 6: トークンミント（forge script）
 # =============================================================================
 
 print_header "[6/8] トークンミント"
 
-MINT_AMOUNT=${MINT_AMOUNT:-100000000000000000000}  # 100 tokens
+# .envを再読み込み
+source "$ENV_FILE"
 
 print_info "トークンをミント中..."
-TX_OUTPUT=$(cast send $TOKEN_ADDRESS \
-    "mint(address,uint256)" \
-    $DEPLOYER \
-    $MINT_AMOUNT \
+forge script script/Token.s.sol:MintToken \
     --rpc-url fuji \
-    --private-key $PRIVATE_KEY 2>&1)
+    --broadcast
 
-TX_HASH=$(echo "$TX_OUTPUT" | grep "transactionHash" | awk '{print $2}')
-if [ -n "$TX_HASH" ]; then
-    print_success "Tx: https://testnet.snowtrace.io/tx/$TX_HASH"
-fi
-
-print_success "ミント完了: $(cast from-wei $MINT_AMOUNT) トークン"
+print_success "ミント完了"
 
 # =============================================================================
-# Step 7: トークン送信
+# Step 7: トークン送信（cast send）
 # =============================================================================
 
 print_header "[7/8] トークン送信"
+
+# .envを再読み込み
+source "$ENV_FILE"
 
 SEND_AMOUNT=${SEND_AMOUNT:-1000000000000000000}  # 1 token
 REQUIRED_GAS_LIMIT=${REQUIRED_GAS_LIMIT:-250000}
 
 # Approve
 print_info "トークンを承認中..."
-TX_OUTPUT=$(cast send $TOKEN_ADDRESS \
+cast send $TOKEN_ADDRESS \
     "approve(address,uint256)" \
     $TOKEN_HOME_ADDRESS \
     $SEND_AMOUNT \
     --rpc-url fuji \
-    --private-key $PRIVATE_KEY 2>&1)
-
-TX_HASH=$(echo "$TX_OUTPUT" | grep "transactionHash" | awk '{print $2}')
-if [ -n "$TX_HASH" ]; then
-    print_success "Approve Tx: https://testnet.snowtrace.io/tx/$TX_HASH"
-fi
+    --private-key $PRIVATE_KEY
 
 # Send
 print_info "トークンを送信中..."
-TX_OUTPUT=$(cast send $TOKEN_HOME_ADDRESS \
+cast send $TOKEN_HOME_ADDRESS \
     "send((bytes32,address,address,address,uint256,uint256,uint256,address),uint256)" \
     "($DISPATCH_BLOCKCHAIN_ID,$REMOTE_TOKEN_TRANSFERRER_ADDRESS,$DEPLOYER,$TOKEN_ADDRESS,0,0,$REQUIRED_GAS_LIMIT,0x0000000000000000000000000000000000000000)" \
     $SEND_AMOUNT \
     --rpc-url fuji \
-    --private-key $PRIVATE_KEY 2>&1)
+    --private-key $PRIVATE_KEY
 
-TX_HASH=$(echo "$TX_OUTPUT" | grep "transactionHash" | awk '{print $2}')
-if [ -n "$TX_HASH" ]; then
-    print_success "Send Tx: https://testnet.snowtrace.io/tx/$TX_HASH"
-fi
-
-print_success "送信完了: $(cast from-wei $SEND_AMOUNT) トークン"
+print_success "送信完了"
 print_warning "クロスチェーンメッセージ処理まで10秒〜数分かかります"
 
 # 少し待機
@@ -351,6 +295,9 @@ sleep 20
 # =============================================================================
 
 print_header "[8/8] 残高確認"
+
+# .envを再読み込み
+source "$ENV_FILE"
 
 # Fuji側残高
 print_info "Fuji側残高を確認中..."
@@ -382,7 +329,7 @@ echo ""
 echo "次のステップ:"
 echo "  - make balance-fuji      # Fuji側残高確認"
 echo "  - make balance-dispatch  # Dispatch側残高確認"
-echo "  - make send AMOUNT=...   # 追加送信"
+echo "  - make send              # 追加送信"
 echo ""
 
 print_success "全ての処理が完了しました！"
