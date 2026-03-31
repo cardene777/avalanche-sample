@@ -7,14 +7,14 @@ pragma solidity 0.8.30;
 
 /**
  * @title Config
- * @notice テストネットワーク設定を管理するコントラクト
- * @dev Fuji C-ChainとDispatch Testnetの設定を提供
+ * @notice ネットワーク設定を管理するコントラクト
+ * @dev Home/Remote チェーンの設定を提供
  */
 contract Config {
     /**
-     * @notice Fuji C-Chain（Avalanche テストネット）の設定
+     * @notice Homeチェーン（トークン発行元）の設定
      */
-    struct FujiConfig {
+    struct HomeConfig {
         address teleporterRegistry;
         address teleporterMessenger;
         bytes32 blockchainID;
@@ -22,9 +22,9 @@ contract Config {
     }
 
     /**
-     * @notice Dispatch Testnetの設定
+     * @notice Remoteチェーン（転送先）の設定
      */
-    struct DispatchConfig {
+    struct RemoteConfig {
         address teleporterRegistry;
         address teleporterMessenger;
         bytes32 blockchainID;
@@ -32,25 +32,24 @@ contract Config {
     }
 
     /**
-     * @notice Fuji C-Chainの設定を取得
-     * @dev Teleporter Registry: 0x827364Da64e8f8466c23520d81731e94c8DDe510（仮）
-     * @dev 実際のアドレスは環境変数またはデプロイ時に設定
+     * @notice Homeチェーンの設定を取得
+     * @dev 実際のアドレスは環境変数から設定
      */
-    function getFujiConfig() internal pure returns (FujiConfig memory) {
-        return FujiConfig({
+    function getHomeConfig() internal pure returns (HomeConfig memory) {
+        return HomeConfig({
             teleporterRegistry: address(0), // .envから設定
             teleporterMessenger: address(0), // .envから設定
             blockchainID: bytes32(0), // .envから設定
-            chainId: 43113 // Fuji C-Chain
+            chainId: 0 // .envから設定
         });
     }
 
     /**
-     * @notice Dispatch Testnetの設定を取得
-     * @dev 実際のアドレスは環境変数またはデプロイ時に設定
+     * @notice Remoteチェーンの設定を取得
+     * @dev 実際のアドレスは環境変数から設定
      */
-    function getDispatchConfig() internal pure returns (DispatchConfig memory) {
-        return DispatchConfig({
+    function getRemoteConfig() internal pure returns (RemoteConfig memory) {
+        return RemoteConfig({
             teleporterRegistry: address(0), // .envから設定
             teleporterMessenger: address(0), // .envから設定
             blockchainID: bytes32(0), // .envから設定

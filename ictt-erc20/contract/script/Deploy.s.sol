@@ -10,17 +10,17 @@ import {ERC20TokenRemoteUpgradeable} from "../src/ictt/TokenRemote/ERC20TokenRem
 import {ICMInitializable} from "../src/utilities/ICMInitializable.sol";
 
 /**
- * @title DeployFujiHome
- * @notice Fuji C-Chain側のコントラクトをデプロイするスクリプト
+ * @title DeployHome
+ * @notice Home側のコントラクト（ERC20 + TokenHome）をデプロイするスクリプト
  * @dev 使用方法:
- *      forge script script/Deploy.s.sol:DeployFujiHome --rpc-url fuji --broadcast
+ *      forge script script/Deploy.s.sol:DeployHome --rpc-url home --broadcast
  */
-contract DeployFujiHome is Script {
+contract DeployHome is Script {
     function run() external {
         uint256 privateKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(privateKey);
 
-        console.log(unicode"=== Fuji Home側デプロイ開始 ===");
+        console.log(unicode"=== Home側デプロイ開始 ===");
         console.log("Deployer:", deployer);
         console.log("");
 
@@ -47,23 +47,99 @@ contract DeployFujiHome is Script {
         console.log(unicode"デプロイ完了！以下を.envに追加してください:");
         console.log("");
         console.log("TOKEN_ADDRESS=", address(sampleToken));
-        console.log("TOKEN_HOME_ADDRESS=", address(tokenHome));
+        console.log("HOME_ADDRESS=", address(tokenHome));
         console.log("=================================================");
     }
 }
 
 /**
- * @title DeployDispatchRemote
- * @notice Dispatch Testnet側のコントラクトをデプロイするスクリプト
+ * @title DeployERC20
+ * @notice ERC20トークンのみをデプロイするスクリプト
  * @dev 使用方法:
- *      forge script script/Deploy.s.sol:DeployDispatchRemote --rpc-url dispatch --broadcast
+ *      forge script script/Deploy.s.sol:DeployERC20 --rpc-url home --broadcast
  */
-contract DeployDispatchRemote is Script {
+contract DeployERC20 is Script {
     function run() external {
         uint256 privateKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(privateKey);
 
-        console.log(unicode"=== Dispatch Remote側デプロイ開始 ===");
+        console.log(unicode"=== ERC20デプロイ開始 ===");
+        console.log("Deployer:", deployer);
+        console.log("");
+
+        vm.startBroadcast(privateKey);
+
+        string memory tokenName = vm.envOr("TOKEN_NAME", string("Sample Token"));
+        string memory tokenSymbol = vm.envOr("TOKEN_SYMBOL", string("SMPL"));
+        SampleERC20 sampleToken = new SampleERC20(tokenName, tokenSymbol);
+        console.log("   Address:", address(sampleToken));
+        console.log("");
+
+        vm.stopBroadcast();
+
+        console.log("=================================================");
+        console.log(unicode"デプロイ完了！以下を.envに追加してください:");
+        console.log("");
+        console.log("TOKEN_ADDRESS=", address(sampleToken));
+        console.log("=================================================");
+    }
+}
+
+/**
+ * @title DeployERC20AndMint
+ * @notice ERC20トークンをデプロイしてMintまで行うスクリプト
+ * @dev 使用方法:
+ *      forge script script/Deploy.s.sol:DeployERC20AndMint --rpc-url home --broadcast
+ */
+contract DeployERC20AndMint is Script {
+    function run() external {
+        uint256 privateKey = vm.envUint("PRIVATE_KEY");
+        address deployer = vm.addr(privateKey);
+        uint256 mintAmount = vm.envOr("MINT_AMOUNT", uint256(100 * 10 ** 18));
+
+        console.log(unicode"=== ERC20デプロイ & Mint開始 ===");
+        console.log("Deployer:", deployer);
+        console.log("");
+
+        vm.startBroadcast(privateKey);
+
+        // 1. ERC20デプロイ
+        console.log(unicode"1. SampleERC20 をデプロイ中...");
+        string memory tokenName = vm.envOr("TOKEN_NAME", string("Sample Token"));
+        string memory tokenSymbol = vm.envOr("TOKEN_SYMBOL", string("SMPL"));
+        SampleERC20 sampleToken = new SampleERC20(tokenName, tokenSymbol);
+        console.log("   Address:", address(sampleToken));
+        console.log("");
+
+        // 2. Mint
+        console.log(unicode"2. トークンをMint中...");
+        sampleToken.mint(deployer, mintAmount);
+        console.log("   Amount:", mintAmount);
+        console.log("");
+
+        vm.stopBroadcast();
+
+        console.log("=================================================");
+        console.log(unicode"デプロイ & Mint完了！");
+        console.log("");
+        console.log("TOKEN_ADDRESS=", address(sampleToken));
+        console.log("MINT_AMOUNT=", mintAmount);
+        console.log("=================================================");
+    }
+}
+
+/**
+ * @title DeployRemote
+ * @notice Remote側のコントラクト（TokenRemote）をデプロイするスクリプト
+ * @dev 使用方法:
+ *      forge script script/Deploy.s.sol:DeployRemote --rpc-url remote --broadcast
+ */
+contract DeployRemote is Script {
+    function run() external {
+        uint256 privateKey = vm.envUint("PRIVATE_KEY");
+        address deployer = vm.addr(privateKey);
+
+        console.log(unicode"=== Remote側デプロイ開始 ===");
         console.log("Deployer:", deployer);
         console.log("");
 
@@ -81,7 +157,7 @@ contract DeployDispatchRemote is Script {
         console.log("=================================================");
         console.log(unicode"デプロイ完了！以下を.envに追加してください:");
         console.log("");
-        console.log("REMOTE_TOKEN_TRANSFERRER_ADDRESS=", address(tokenRemote));
+        console.log("REMOTE_ADDRESS=", address(tokenRemote));
         console.log("=================================================");
     }
 }

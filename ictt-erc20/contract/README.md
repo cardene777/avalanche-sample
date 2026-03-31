@@ -78,8 +78,14 @@ anvil
 ### デプロイ
 
 ```shell
-forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
+# Home側（ERC20 + TokenHome）
+forge script script/Deploy.s.sol:DeployHome --rpc-url home --broadcast
+
+# Remote側（TokenRemote）
+forge script script/Deploy.s.sol:DeployRemote --rpc-url remote --broadcast
 ```
+
+詳細なコマンドは[COMMAND.md](./COMMAND.md)を参照してください。
 
 ### Cast（チェーンとのやり取り）
 
@@ -94,6 +100,20 @@ forge --help
 anvil --help
 cast --help
 ```
+
+## RPC設定
+
+`foundry.toml`に以下のRPCエンドポイントが定義されています：
+
+| エイリアス | 説明 |
+|-----------|------|
+| `home` | Homeチェーン（`.env`の`HOME_RPC_URL`から読み込み） |
+| `remote` | Remoteチェーン（`.env`の`REMOTE_RPC_URL`から読み込み） |
+| `fuji` | Avalanche Fuji C-Chain（パブリック） |
+| `dispatch` | Dispatch Testnet（パブリック） |
+| `local` | ローカルノード |
+
+`.env`に`HOME_RPC_URL`、`HOME_BLOCKCHAIN_ID`、`HOME_TELEPORTER_REGISTRY`と、`REMOTE_*`の対応する設定を追加してください。
 
 ## 依存関係
 

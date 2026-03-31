@@ -10,7 +10,7 @@ import {SampleERC20} from "../src/ictt/SampleERC20.sol";
  * @title MintToken
  * @notice トークンをミントするスクリプト
  * @dev 使用方法:
- *      forge script script/Token.s.sol:MintToken --rpc-url fuji --broadcast
+ *      forge script script/Token.s.sol:MintToken --rpc-url home --broadcast
  */
 contract MintToken is Script {
     function run() external {

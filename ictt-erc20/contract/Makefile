@@ -1,4 +1,4 @@
-.PHONY: help install build test clean deploy-fuji initialize-fuji deploy-dispatch initialize-dispatch register-remote mint send balance-fuji balance-dispatch deploy-and-send fmt
+.PHONY: help install build test clean deploy-home deploy-remote initialize-home initialize-remote register-remote mint send balance-home balance-remote deploy-and-send fmt
 
 # デフォルトターゲット
 help:
@@ -12,24 +12,21 @@ help:
 	@echo "  make test              - テストを実行"
 	@echo ""
 	@echo "デプロイ:"
-	@echo "  make deploy-fuji       - Fuji側のコントラクトをデプロイ"
-	@echo "  make initialize-fuji   - Fuji側のTokenHomeを初期化"
-	@echo "  make deploy-dispatch   - Dispatch側のコントラクトをデプロイ"
-	@echo "  make initialize-dispatch - Dispatch側のTokenRemoteを初期化"
+	@echo "  make deploy-home       - Home側のコントラクトをデプロイ"
+	@echo "  make initialize-home   - Home側のTokenHomeを初期化"
+	@echo "  make deploy-remote     - Remote側のコントラクトをデプロイ"
+	@echo "  make initialize-remote - Remote側のTokenRemoteを初期化"
 	@echo "  make register-remote   - TokenRemoteをTokenHomeに登録"
 	@echo ""
 	@echo "トークン操作:"
 	@echo "  make mint              - トークンをミント（デフォルト100トークン）"
 	@echo "  make send              - トークンを送信（デフォルト1トークン）"
-	@echo "  make balance-fuji      - Fuji側の残高確認"
-	@echo "  make balance-dispatch  - Dispatch側の残高確認"
+	@echo "  make balance-home      - Home側の残高確認"
+	@echo "  make balance-remote    - Remote側の残高確認"
 	@echo ""
 	@echo "ユーティリティ:"
 	@echo "  make clean             - ビルド成果物を削除"
 	@echo "  make fmt               - コードフォーマット"
-	@echo ""
-	@echo "統合コマンド（推奨）:"
-	@echo "  make deploy-and-send   - デプロイから送信まで全自動実行"
 	@echo ""
 
 # 環境変数の読み込み
@@ -38,6 +35,7 @@ export
 
 # デフォルト値
 SEND_AMOUNT ?= 1000000000000000000
+MINT_AMOUNT ?= 100000000000000000000
 REQUIRED_GAS_LIMIT ?= 250000
 
 # ===================================
@@ -68,50 +66,50 @@ fmt:
 # デプロイ（forge script）
 # ===================================
 
-deploy-fuji:
+deploy-home:
 	@echo "====================================="
-	@echo "Fuji側デプロイ"
+	@echo "Home側デプロイ"
 	@echo "====================================="
-	forge script script/Deploy.s.sol:DeployFujiHome --rpc-url fuji --broadcast
+	forge script script/Deploy.s.sol:DeployHome --rpc-url home --broadcast
 
-deploy-dispatch:
+deploy-remote:
 	@echo "====================================="
-	@echo "Dispatch側デプロイ"
+	@echo "Remote側デプロイ"
 	@echo "====================================="
-	forge script script/Deploy.s.sol:DeployDispatchRemote --rpc-url dispatch --broadcast
+	forge script script/Deploy.s.sol:DeployRemote --rpc-url remote --broadcast
 
 # ===================================
 # 初期化・登録（cast send）
 # ===================================
 
-initialize-fuji:
+initialize-home:
 	@echo "====================================="
-	@echo "Fuji側TokenHome初期化"
+	@echo "Home側TokenHome初期化"
 	@echo "====================================="
 	@DEPLOYER=$$(cast wallet address --private-key $(PRIVATE_KEY)); \
-	cast send $(TOKEN_HOME_ADDRESS) \
+	cast send $(HOME_ADDRESS) \
 		"initialize(address,address,uint256,address,uint8)" \
-		0xF86Cb19Ad8405AEFa7d09C778215D2Cb6eBfB228 \
+		$(HOME_TELEPORTER_REGISTRY) \
 		$$DEPLOYER \
 		1 \
 		$(TOKEN_ADDRESS) \
 		18 \
-		--rpc-url fuji \
+		--rpc-url home \
 		--private-key $(PRIVATE_KEY)
 	@echo "初期化完了"
 
-initialize-dispatch:
+initialize-remote:
 	@echo "====================================="
-	@echo "Dispatch側TokenRemote初期化"
+	@echo "Remote側TokenRemote初期化"
 	@echo "====================================="
 	@DEPLOYER=$$(cast wallet address --private-key $(PRIVATE_KEY)); \
-	cast send $(REMOTE_TOKEN_TRANSFERRER_ADDRESS) \
+	cast send $(REMOTE_ADDRESS) \
 		"initialize((address,address,uint256,bytes32,address,uint8),string,string,uint8)" \
-		"(0xF86Cb19Ad8405AEFa7d09C778215D2Cb6eBfB228,$$DEPLOYER,1,$(TOKEN_HOME_BLOCKCHAIN_ID),$(TOKEN_HOME_ADDRESS),18)" \
+		"($(REMOTE_TELEPORTER_REGISTRY),$$DEPLOYER,1,$(HOME_BLOCKCHAIN_ID),$(HOME_ADDRESS),18)" \
 		"Bridged Token" \
 		"bSMPL" \
 		18 \
-		--rpc-url dispatch \
+		--rpc-url remote \
 		--private-key $(PRIVATE_KEY)
 	@echo "初期化完了"
 
@@ -119,10 +117,10 @@ register-remote:
 	@echo "====================================="
 	@echo "リモート登録"
 	@echo "====================================="
-	cast send $(REMOTE_TOKEN_TRANSFERRER_ADDRESS) \
+	cast send $(REMOTE_ADDRESS) \
 		"registerWithHome((address,uint256))" \
 		"(0x0000000000000000000000000000000000000000,0)" \
-		--rpc-url dispatch \
+		--rpc-url remote \
 		--private-key $(PRIVATE_KEY)
 	@echo "登録リクエスト送信完了"
 	@echo "※クロスチェーン登録完了まで10秒〜数分かかります"
@@ -133,60 +131,57 @@ register-remote:
 
 mint:
 	@echo "====================================="
-	@echo "トークンミント"
+	@echo "トークンミント（Home側）"
 	@echo "====================================="
-	forge script script/Token.s.sol:MintToken --rpc-url fuji --broadcast
+	@DEPLOYER=$$(cast wallet address --private-key $(PRIVATE_KEY)); \
+	cast send $(TOKEN_ADDRESS) \
+		"mint(address,uint256)" \
+		$$DEPLOYER \
+		$(MINT_AMOUNT) \
+		--rpc-url home \
+		--private-key $(PRIVATE_KEY)
+	@echo "ミント完了: $(MINT_AMOUNT) wei"
 
 send:
 	@echo "====================================="
-	@echo "トークン送信"
+	@echo "トークン送信（Home → Remote）"
 	@echo "====================================="
 	@DEPLOYER=$$(cast wallet address --private-key $(PRIVATE_KEY)); \
 	echo "1. トークン承認中..."; \
 	cast send $(TOKEN_ADDRESS) \
 		"approve(address,uint256)" \
-		$(TOKEN_HOME_ADDRESS) \
+		$(HOME_ADDRESS) \
 		$(SEND_AMOUNT) \
-		--rpc-url fuji \
+		--rpc-url home \
 		--private-key $(PRIVATE_KEY); \
 	echo "2. トークン送信中..."; \
-	cast send $(TOKEN_HOME_ADDRESS) \
+	cast send $(HOME_ADDRESS) \
 		"send((bytes32,address,address,address,uint256,uint256,uint256,address),uint256)" \
-		"($(DISPATCH_BLOCKCHAIN_ID),$(REMOTE_TOKEN_TRANSFERRER_ADDRESS),$$DEPLOYER,$(TOKEN_ADDRESS),0,0,$(REQUIRED_GAS_LIMIT),0x0000000000000000000000000000000000000000)" \
+		"($(REMOTE_BLOCKCHAIN_ID),$(REMOTE_ADDRESS),$$DEPLOYER,$(TOKEN_ADDRESS),0,0,$(REQUIRED_GAS_LIMIT),0x0000000000000000000000000000000000000000)" \
 		$(SEND_AMOUNT) \
-		--rpc-url fuji \
+		--rpc-url home \
 		--private-key $(PRIVATE_KEY)
 	@echo "送信完了"
 	@echo "※クロスチェーンメッセージ処理まで10秒〜数分かかります"
 
-balance-fuji:
+balance-home:
 	@echo "====================================="
-	@echo "Fuji側の残高確認"
+	@echo "Home側の残高確認"
 	@echo "====================================="
 	@DEPLOYER=$$(cast wallet address --private-key $(PRIVATE_KEY)); \
-	BALANCE_RAW=$$(cast call $(TOKEN_ADDRESS) "balanceOf(address)(uint256)" $$DEPLOYER --rpc-url fuji); \
+	BALANCE_RAW=$$(cast call $(TOKEN_ADDRESS) "balanceOf(address)(uint256)" $$DEPLOYER --rpc-url home); \
 	BALANCE=$$(echo $$BALANCE_RAW | awk '{print $$1}'); \
 	echo "残高: $$BALANCE wei"; \
 	BALANCE_ETHER=$$(cast from-wei $$BALANCE); \
 	echo "残高: $$BALANCE_ETHER トークン"
 
-balance-dispatch:
+balance-remote:
 	@echo "====================================="
-	@echo "Dispatch側の残高確認"
+	@echo "Remote側の残高確認"
 	@echo "====================================="
 	@DEPLOYER=$$(cast wallet address --private-key $(PRIVATE_KEY)); \
-	BALANCE_RAW=$$(cast call $(REMOTE_TOKEN_TRANSFERRER_ADDRESS) "balanceOf(address)(uint256)" $$DEPLOYER --rpc-url dispatch); \
+	BALANCE_RAW=$$(cast call $(REMOTE_ADDRESS) "balanceOf(address)(uint256)" $$DEPLOYER --rpc-url remote); \
 	BALANCE=$$(echo $$BALANCE_RAW | awk '{print $$1}'); \
 	echo "残高: $$BALANCE wei"; \
 	BALANCE_ETHER=$$(cast from-wei $$BALANCE); \
 	echo "残高: $$BALANCE_ETHER トークン"
-
-# ===================================
-# 統合コマンド
-# ===================================
-
-deploy-and-send:
-	@echo "====================================="
-	@echo "デプロイから送信まで全自動実行"
-	@echo "====================================="
-	@bash script/deploy-and-send.sh

@@ -12,6 +12,11 @@ ffi = false
 verbosity = 2
 
 [rpc_endpoints]
+# Home/Remote（.envから読み込み）
+home = "${HOME_RPC_URL}"
+remote = "${REMOTE_RPC_URL}"
+
+# パブリックチェーン（参考用）
 fuji = "https://api.avax-test.network/ext/bc/C/rpc"
 dispatch = "https://subnets.avax.network/dispatch/testnet/rpc"
 local = "http://127.0.0.1:9650/ext/bc/C/rpc"
